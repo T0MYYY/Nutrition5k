@@ -14,6 +14,8 @@ This project provides a clean, reproducible pipeline for calorie regression on N
 
 `image (RGB or RGB-D) -> ResNet regressor -> calories`
 
+Live demo: [https://austinwang10-food-calorie-app.hf.space/](https://austinwang10-food-calorie-app.hf.space/)
+
 ## Official resources used
 
 - Nutrition5k dataset and official repo: [google-research-datasets/Nutrition5k](https://github.com/google-research-datasets/Nutrition5k)
