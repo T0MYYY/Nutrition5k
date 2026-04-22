@@ -1,3 +1,13 @@
+---
+title: Food Calorie App
+emoji: 🍱
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+app_file: app.py
+pinned: false
+---
+
 # Nutrition5k Calorie Prediction (Reproducible Baseline)
 
 This project provides a clean, reproducible pipeline for calorie regression on Nutrition5k:
