@@ -15,6 +15,7 @@ from model import CalorieRegressor
 DEPTH_MODE_MIDAS = "Auto from RGB (MiDaS)"
 DEPTH_MODE_HEURISTIC = "Auto from RGB (Heuristic)"
 DEPTH_MODE_REAL_UPLOAD = "Upload real depth image"
+DEPTH_MODE_CHOICES = [DEPTH_MODE_MIDAS, DEPTH_MODE_HEURISTIC, DEPTH_MODE_REAL_UPLOAD]
 
 
 def parse_args() -> argparse.Namespace:
@@ -143,17 +144,17 @@ class Predictor:
         rgb_img = ImageOps.exif_transpose(rgb_img)
         return rgb_img.convert("RGB")
 
-    def _build_rgb_input(self, rgb_img: Image.Image) -> torch.Tensor:
-        """Convert a user-uploaded RGB image to model-ready tensor (NCHW)."""
-        rgb_img = self._prepare_rgb(rgb_img)
-        return self.rgb_transform(rgb_img).unsqueeze(0).to(self.device)
+    def _rgb_tensor(self, rgb_img: Image.Image) -> torch.Tensor:
+        """Convert a user-uploaded RGB image to CHW tensor."""
+        return self.rgb_transform(self._prepare_rgb(rgb_img))
 
-    def _build_rgbd_input(self, rgb_img: Image.Image, depth_t: torch.Tensor) -> torch.Tensor:
-        """Build model-ready RGB-D input from already prepared depth tensor."""
-        rgb_img = self._prepare_rgb(rgb_img)
-        rgb_t = self.rgb_transform(rgb_img)
-        x = torch.cat([rgb_t, depth_t], dim=0).unsqueeze(0).to(self.device)
-        return x
+    def _build_rgb_input(self, rgb_img: Image.Image) -> torch.Tensor:
+        """Convert RGB image to model-ready tensor (NCHW)."""
+        return self._rgb_tensor(rgb_img).unsqueeze(0).to(self.device)
+
+    def _build_rgbd_input(self, rgb_t: torch.Tensor, depth_t: torch.Tensor) -> torch.Tensor:
+        """Build model-ready RGB-D input from RGB/depth CHW tensors."""
+        return torch.cat([rgb_t, depth_t], dim=0).unsqueeze(0).to(self.device)
 
     def _heuristic_depth_from_rgb(self, rgb_img: Image.Image) -> torch.Tensor:
         # Fallback when user has no true depth: use luminance as pseudo-depth.
@@ -267,17 +268,18 @@ class Predictor:
             return "Please upload an RGB image.", None
         try:
             rgb_prepared = self._prepare_rgb(rgb_img)
-            if depth_source_mode == DEPTH_MODE_MIDAS:
-                depth_t = self._auto_depth_from_rgb(rgb_prepared, backend="midas")
-            elif depth_source_mode == DEPTH_MODE_HEURISTIC:
-                depth_t = self._auto_depth_from_rgb(rgb_prepared, backend="heuristic")
-            elif depth_source_mode == DEPTH_MODE_REAL_UPLOAD:
-                if depth_img is None:
-                    raise ValueError("Please upload a real depth image in RGB-D mode.")
-                depth_t = self._depth_to_tensor(depth_img)
-            else:
+            rgb_t = self.rgb_transform(rgb_prepared)
+            depth_builder = {
+                DEPTH_MODE_MIDAS: lambda: self._auto_depth_from_rgb(rgb_prepared, backend="midas"),
+                DEPTH_MODE_HEURISTIC: lambda: self._auto_depth_from_rgb(rgb_prepared, backend="heuristic"),
+                DEPTH_MODE_REAL_UPLOAD: lambda: self._depth_to_tensor(depth_img),
+            }.get(depth_source_mode)
+            if depth_builder is None:
                 raise ValueError(f"Unsupported depth mode: {depth_source_mode}")
-            x = self._build_rgbd_input(rgb_prepared, depth_t)
+            if depth_source_mode == DEPTH_MODE_REAL_UPLOAD and depth_img is None:
+                raise ValueError("Please upload a real depth image in RGB-D mode.")
+            depth_t = depth_builder()
+            x = self._build_rgbd_input(rgb_t, depth_t)
         except ValueError as exc:
             return str(exc), None
         text = self._format_calories_and_class(x)
@@ -296,18 +298,13 @@ class AppRuntime:
 
     def mode_ui_updates(self, mode: str, depth_mode: str):
         is_rgbd = mode == "rgbd"
-        show_real_depth_input = is_rgbd and (depth_mode == DEPTH_MODE_REAL_UPLOAD)
+        show_preview_controls = is_rgbd and (depth_mode != DEPTH_MODE_REAL_UPLOAD)
         return (
             gr.update(visible=is_rgbd),  # depth_mode_dd
-            gr.update(visible=show_real_depth_input),  # depth_input
-            gr.update(visible=is_rgbd),  # invert_preview
-            gr.update(visible=is_rgbd),  # depth_contrast
-            gr.update(visible=is_rgbd),  # depth_preview
+            gr.update(visible=show_preview_controls),  # invert_preview
+            gr.update(visible=show_preview_controls),  # depth_contrast
+            gr.update(visible=show_preview_controls),  # depth_preview
         )
-
-    def depth_mode_ui_updates(self, depth_mode: str):
-        needs_depth_upload = depth_mode == DEPTH_MODE_REAL_UPLOAD
-        return (gr.update(visible=needs_depth_upload),)
 
     def predict(
         self,
@@ -324,6 +321,11 @@ class AppRuntime:
             return self.rgb_predictor.predict_rgb(rgb_img), None
         if self.rgbd_predictor is None:
             return "RGB-D checkpoint is not loaded.", None
+        if depth_source_mode == DEPTH_MODE_REAL_UPLOAD and depth_img is None:
+            return (
+                "Please upload a real depth image when using 'Upload real depth image' mode.",
+                None,
+            )
         return self.rgbd_predictor.predict_rgbd(
             rgb_img=rgb_img,
             depth_source_mode=depth_source_mode,
@@ -348,113 +350,350 @@ def main() -> None:
         else:
             rgbd_ckpt = args.checkpoint_path
 
+    predictor_common_kwargs = dict(
+        image_size=args.image_size,
+        max_depth_units=args.max_depth_units,
+        auto_depth_backend=args.auto_depth_backend,
+        cls_top_k=args.cls_top_k,
+        cls_conf_threshold=args.cls_conf_threshold,
+    )
+
     rgb_predictor = None
     if rgb_ckpt:
         if not Path(rgb_ckpt).exists():
             raise FileNotFoundError(f"RGB checkpoint not found: {rgb_ckpt}")
-        rgb_predictor = Predictor(
-            checkpoint_path=rgb_ckpt,
-            mode="rgb",
-            image_size=args.image_size,
-            max_depth_units=args.max_depth_units,
-            auto_depth_backend=args.auto_depth_backend,
-            cls_top_k=args.cls_top_k,
-            cls_conf_threshold=args.cls_conf_threshold,
-        )
+        rgb_predictor = Predictor(checkpoint_path=rgb_ckpt, mode="rgb", **predictor_common_kwargs)
 
     rgbd_predictor = None
     if rgbd_ckpt:
         if not Path(rgbd_ckpt).exists():
             raise FileNotFoundError(f"RGB-D checkpoint not found: {rgbd_ckpt}")
-        rgbd_predictor = Predictor(
-            checkpoint_path=rgbd_ckpt,
-            mode="rgbd",
-            image_size=args.image_size,
-            max_depth_units=args.max_depth_units,
-            auto_depth_backend=args.auto_depth_backend,
-            cls_top_k=args.cls_top_k,
-            cls_conf_threshold=args.cls_conf_threshold,
-        )
+        rgbd_predictor = Predictor(checkpoint_path=rgbd_ckpt, mode="rgbd", **predictor_common_kwargs)
 
     app = AppRuntime(rgb_predictor=rgb_predictor, rgbd_predictor=rgbd_predictor)
-    mode_choices = []
-    if rgb_predictor is not None:
-        mode_choices.append("rgb")
-    if rgbd_predictor is not None:
-        mode_choices.append("rgbd")
+    mode_choices = [name for name, p in (("rgb", rgb_predictor), ("rgbd", rgbd_predictor)) if p is not None]
     if not mode_choices:
         raise ValueError("No available predictor loaded.")
     default_mode = mode_choices[0]
+    print(f"[info] Available inference modes: {mode_choices}")
 
-    with gr.Blocks(title="Nutrition5k Calorie Predictor") as demo:
-        gr.Markdown("## Nutrition5k Calorie Predictor")
+    theme = gr.themes.Default(
+        primary_hue="gray",
+        secondary_hue="gray",
+        neutral_hue="zinc",
+    )
+    css = """
+    .gradio-container {
+      max-width: 980px !important;
+      margin: 0 auto;
+      padding-top: 14px;
+      background: linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif !important;
+      color: #1d1d1f;
+      --ui-border: #d2d2d7;
+      --ui-border-w: 1px;
+      --ui-radius: 0px;
+      --ui-radius-lg: 0px;
+    }
+    .gradio-container .block {
+      border: var(--ui-border-w) solid var(--ui-border);
+      border-radius: var(--ui-radius-lg);
+      background: #ffffff;
+      box-shadow: none !important;
+    }
+    .gradio-container .gr-form, .gradio-container .gr-box {
+      border-radius: var(--ui-radius) !important;
+      border-color: var(--ui-border) !important;
+      border-style: solid !important;
+      box-shadow: none !important;
+    }
+    .gradio-container .gr-group,
+    .gradio-container .gr-panel {
+      border-radius: var(--ui-radius-lg) !important;
+    }
+    .gradio-container .thumbnail-item,
+    .gradio-container .image-container,
+    .gradio-container .upload-container,
+    .gradio-container [class*="upload"] {
+      border-radius: var(--ui-radius) !important;
+      border-style: solid !important;
+      border-color: var(--ui-border) !important;
+      box-shadow: none !important;
+    }
+    .gradio-container button.primary, .gradio-container button.secondary {
+      border-radius: 0 !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.01em;
+    }
+    #rgb-input .image-container,
+    #depth-input .image-container,
+    #depth-preview .image-container {
+      border-radius: var(--ui-radius) !important;
+      border-style: solid !important;
+      border-color: var(--ui-border) !important;
+      box-shadow: none !important;
+    }
+    #result-box textarea {
+      line-height: 1.45 !important;
+      padding: 10px 12px !important;
+      border-radius: var(--ui-radius) !important;
+      border-color: var(--ui-border) !important;
+      box-sizing: border-box !important;
+      box-shadow: none !important;
+    }
+    #mode-dd .wrap,
+    #depth-mode-dd .wrap,
+    #result-box .wrap,
+    #result-box textarea {
+      border-radius: var(--ui-radius-lg) !important;
+      border: var(--ui-border-w) solid var(--ui-border) !important;
+      box-shadow: none !important;
+    }
+    #mode-dd input,
+    #depth-mode-dd input {
+      box-shadow: none !important;
+      line-height: 1.4 !important;
+    }
+    #top-control-row {
+      align-items: stretch !important;
+    }
+    #mode-dd .wrap,
+    #depth-mode-dd .wrap {
+      min-height: 42px !important;
+    }
+    #mode-dd div,
+    #mode-dd input,
+    #result-box div,
+    #result-box textarea {
+      border-radius: var(--ui-radius-lg) !important;
+    }
+    #predict-btn button {
+      width: 100% !important;
+      min-height: 44px;
+      border-radius: 0 !important;
+      border: var(--ui-border-w) solid #0f172a !important;
+      background: #0f172a !important;
+      color: #ffffff !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.01em;
+    }
+    #predict-btn button:hover {
+      background: #1f2937 !important;
+      border-color: #1f2937 !important;
+    }
+    .gradio-container *:focus {
+      box-shadow: none !important;
+    }
+    #app-title {
+      text-align: center;
+      margin-bottom: 3px;
+      letter-spacing: -0.01em;
+      color: #1d1d1f;
+    }
+    #app-subtitle {
+      text-align: center;
+      color: #424245;
+      margin-top: 0;
+      margin-bottom: 3px;
+      font-size: 0.99rem;
+      font-weight: 500;
+    }
+    #intro-text {
+      text-align: center;
+      color: #6e6e73;
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+    #tips-box {
+      background: #ffffff;
+      border: var(--ui-border-w) solid var(--ui-border);
+      border-radius: var(--ui-radius-lg);
+      padding: 14px 16px;
+      margin-top: 4px;
+      margin-bottom: 12px;
+    }
+    #tips-box h4 {
+      margin: 0 0 8px 0;
+      font-size: 0.93rem;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    #tips-box ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    #tips-box li {
+      margin: 0 0 6px 0;
+      line-height: 1.55;
+      color: #3a3a3c;
+      font-size: 0.92rem;
+    }
+    #tips-box li:last-child {
+      margin-bottom: 0;
+    }
+    #tips-box strong {
+      color: #1d1d1f;
+      font-weight: 600;
+    }
+    #depth-input .image-container {
+      border-radius: var(--ui-radius-lg) !important;
+      border: var(--ui-border-w) solid var(--ui-border) !important;
+      box-shadow: none !important;
+    }
+    #depth-upload-note {
+      font-size: 0.86rem;
+      color: #6e6e73;
+      margin-top: 2px;
+      margin-bottom: 0;
+    }
+    #mode-row-hint {
+      margin-top: -4px;
+      margin-bottom: 10px;
+      font-size: 0.86rem;
+      color: #6e6e73;
+    }
+    #result-box textarea {
+      font-size: 1.05rem !important;
+      font-weight: 600 !important;
+      line-height: 1.55 !important;
+      color: #0f172a !important;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%) !important;
+      border: var(--ui-border-w) solid #93c5fd !important;
+      border-left: 4px solid #2563eb !important;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08) inset !important;
+    }
+    #result-box label {
+      color: #1d4ed8 !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.01em;
+    }
+    #depth-contrast input[type="range"] {
+      accent-color: #334155 !important;
+    }
+    #depth-contrast input[type="range"]::-webkit-slider-thumb {
+      background: #334155 !important;
+      border: 1px solid #334155 !important;
+    }
+    #depth-contrast input[type="range"]::-webkit-slider-runnable-track {
+      background: #cbd5e1 !important;
+    }
+    #depth-contrast input[type="range"]::-moz-range-thumb {
+      background: #334155 !important;
+      border: 1px solid #334155 !important;
+    }
+    #depth-contrast input[type="range"]::-moz-range-track {
+      background: #cbd5e1 !important;
+    }
+    """
+
+    with gr.Blocks(title="Food Calorie Estimator") as demo:
+        gr.Markdown("## Food Calorie Estimator", elem_id="app-title")
         gr.Markdown(
-            "Upload an original food photo. The app automatically preprocesses it "
-            "to model input format. In RGB-D mode, it also builds depth input "
-            "using one of three dropdown methods."
+            "Simple calorie estimation from food photos.",
+            elem_id="app-subtitle",
         )
         gr.Markdown(
-            "- **RGB mode**: uploaded image is automatically preprocessed.\n"
-            "- **RGB-D mode depth options**:\n"
-            f"  1) `{DEPTH_MODE_MIDAS}`\n"
-            f"  2) `{DEPTH_MODE_HEURISTIC}`\n"
-            f"  3) `{DEPTH_MODE_REAL_UPLOAD}`"
+            "Upload an image, choose mode, and click **Predict**.",
+            elem_id="intro-text",
         )
-        mode_dd = gr.Dropdown(
-            choices=mode_choices,
-            value=default_mode,
-            label="Inference Mode",
-            info="Choose model mode in UI (no terminal mode switch needed).",
+        with gr.Row(elem_id="top-control-row"):
+            mode_dd = gr.Dropdown(
+                choices=mode_choices,
+                value=default_mode,
+                label="Inference Mode",
+                elem_id="mode-dd",
+                filterable=False,
+                allow_custom_value=False,
+                interactive=True,
+            )
+            depth_mode_dd = gr.Dropdown(
+                choices=DEPTH_MODE_CHOICES,
+                value=DEPTH_MODE_MIDAS,
+                label="RGB-D Depth Source",
+                visible=(default_mode == "rgbd"),
+                elem_id="depth-mode-dd",
+                filterable=False,
+                allow_custom_value=False,
+                interactive=True,
+            )
+        gr.Markdown(
+            "RGB = photo only, RGB-D = photo + depth cue. "
+            "Depth source: MiDaS / Heuristic / Upload real aligned depth map.",
+            elem_id="mode-row-hint",
         )
-        rgb_input = gr.Image(type="pil", label="Original Food Image (JPG/PNG)")
-        depth_mode_dd = gr.Dropdown(
-            choices=[DEPTH_MODE_MIDAS, DEPTH_MODE_HEURISTIC, DEPTH_MODE_REAL_UPLOAD],
-            value=DEPTH_MODE_MIDAS,
-            label="RGB-D Depth Source",
-            info="Choose how depth is generated for RGB-D inference.",
-            visible=(default_mode == "rgbd"),
+        gr.HTML(
+            f"""
+            <div id="tips-box">
+              <h4>Depth Method Quick Notes</h4>
+              <ul>
+                <li><strong>{DEPTH_MODE_MIDAS}:</strong> Best automatic depth quality from a single RGB photo.</li>
+                <li><strong>{DEPTH_MODE_HEURISTIC}:</strong> Fast fallback using image brightness as pseudo-depth.</li>
+                <li><strong>{DEPTH_MODE_REAL_UPLOAD}:</strong> Use your own aligned depth image (PNG preferred).</li>
+              </ul>
+            </div>
+            """
         )
-        depth_input = gr.Image(
-            type="pil",
-            label="Real Depth Image (PNG preferred)",
-            visible=False,
-        )
-        out = gr.Textbox(label="Result")
-        depth_preview = gr.Image(
-            type="pil",
-            label="Depth Preview",
-            interactive=False,
-            visible=(default_mode == "rgbd"),
-        )
-        invert_preview = gr.Checkbox(
-            value=False, label="Invert Depth Preview", visible=(default_mode == "rgbd")
-        )
-        depth_contrast = gr.Slider(
-            minimum=1.0,
-            maximum=3.0,
-            value=1.5,
-            step=0.1,
-            label="Depth Preview Contrast",
-            visible=(default_mode == "rgbd"),
-        )
+        with gr.Row():
+            with gr.Column(scale=1):
+                rgb_input = gr.Image(type="pil", label="Food Image (JPG/PNG)", elem_id="rgb-input")
+            with gr.Column(scale=1):
+                depth_input = gr.Image(
+                    type="pil",
+                    label="Real Depth Image (optional)",
+                    visible=True,
+                    elem_id="depth-input",
+                )
+                gr.Markdown(
+                    "Only used when `RGB-D Depth Source = Upload real depth image`.",
+                    elem_id="depth-upload-note",
+                )
+        with gr.Row():
+            with gr.Column(scale=1):
+                invert_preview = gr.Checkbox(
+                    value=False,
+                    label="Invert Depth Preview",
+                    visible=(default_mode == "rgbd"),
+                    elem_id="invert-preview",
+                )
+                depth_contrast = gr.Slider(
+                    minimum=1.0,
+                    maximum=3.0,
+                    value=1.5,
+                    step=0.1,
+                    label="Depth Preview Contrast",
+                    visible=(default_mode == "rgbd"),
+                    elem_id="depth-contrast",
+                )
+            with gr.Column(scale=1):
+                depth_preview = gr.Image(
+                    type="pil",
+                    label="Depth Preview",
+                    interactive=False,
+                    visible=(default_mode == "rgbd"),
+                    height=170,
+                    elem_id="depth-preview",
+                )
+        btn = gr.Button("Predict Calories", variant="secondary", elem_id="predict-btn")
+        out = gr.Textbox(label="Prediction Result", lines=8, elem_id="result-box")
         mode_dd.change(
             fn=app.mode_ui_updates,
             inputs=[mode_dd, depth_mode_dd],
-            outputs=[depth_mode_dd, depth_input, invert_preview, depth_contrast, depth_preview],
+            outputs=[depth_mode_dd, invert_preview, depth_contrast, depth_preview],
         )
         depth_mode_dd.change(
-            fn=app.depth_mode_ui_updates,
-            inputs=[depth_mode_dd],
-            outputs=[depth_input],
+            fn=app.mode_ui_updates,
+            inputs=[mode_dd, depth_mode_dd],
+            outputs=[depth_mode_dd, invert_preview, depth_contrast, depth_preview],
         )
-        btn = gr.Button("Predict")
         btn.click(
             fn=app.predict,
             inputs=[mode_dd, rgb_input, depth_mode_dd, depth_input, invert_preview, depth_contrast],
             outputs=[out, depth_preview],
         )
 
-    demo.launch(server_name=args.host, server_port=args.port)
+    demo.launch(server_name=args.host, server_port=args.port, theme=theme, css=css)
 
 
 if __name__ == "__main__":
