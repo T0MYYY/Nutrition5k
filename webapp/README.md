@@ -8,307 +8,437 @@ app_file: app.py
 pinned: false
 ---
 
-# Nutrition5k Calorie Prediction (Reproducible Baseline)
+# Nutrition5k Calorie Prediction — Repository Manual
 
-This project provides a clean, reproducible pipeline for calorie regression on Nutrition5k:
+End-to-end documentation for this codebase: **data layout**, **configuration**, **model**, **training**, **evaluation**, **Gradio demo**, **Hugging Face Spaces**, **helper scripts**, and **presentation exports**. Regression target is **`total_calories`** per dish from Nutrition5k metadata; inputs are **overhead RGB** or **RGB + depth** tensors.
 
-`image (RGB or RGB-D) -> ResNet regressor -> calories`
+**One-line pipeline:** `overhead image → ResNet-18 → MLP head → calories (kcal)` (+ optional Food-101 `classify` head).
 
-Live demo: [https://austinwang10-food-calorie-app.hf.space/](https://austinwang10-food-calorie-app.hf.space/)
+**Live Space:** [https://austinwang10-food-calorie-app.hf.space/](https://austinwang10-food-calorie-app.hf.space/)
 
-## Official resources used
+---
 
-- Nutrition5k dataset and official repo: [google-research-datasets/Nutrition5k](https://github.com/google-research-datasets/Nutrition5k)
-- RGB-D baseline example: [SightVanish/NutritionEstimation](https://github.com/SightVanish/NutritionEstimation)
-- Structured training pipeline reference: [Lyce24/NutriFusionNet](https://github.com/Lyce24/NutriFusionNet)
+## Table of contents
 
-## Nutrition5k structure summary
+1. [Quick start](#1-quick-start)
+2. [Repository layout](#2-repository-layout)
+3. [Dependencies (`requirements.txt`)](#3-dependencies-requirementstxt)
+4. [Nutrition5k on-disk layout](#4-nutrition5k-on-disk-layout)
+5. [Data loading and splits (`data_loader.py`)](#5-data-loading-and-splits-data_loaderpy)
+6. [Model (`model.py`)](#6-model-modelpy)
+7. [Configuration CLI (`config.py`)](#7-configuration-cli-configpy)
+8. [Training (`train.py`)](#8-training-trainpy)
+9. [Nutrition5k test evaluation (`evaluate.py`)](#9-nutrition5k-test-evaluation-evaluatepy)
+10. [Food-101 test accuracy (`evaluate_food101.py`)](#10-food-101-test-accuracy-evaluate_food101py)
+11. [Utilities (`utils.py`)](#11-utilities-utilspy)
+12. [Scripts under `scripts/`](#12-scripts-under-scripts)
+13. [Gradio web app (`web_app.py`)](#13-gradio-web-app-web_apppy)
+14. [Hugging Face entry (`app.py`)](#14-hugging-face-entry-apppy)
+15. [Run artifacts: directories and files](#15-run-artifacts-directories-and-files)
+16. [Presentation bundle (`presentation/`)](#16-presentation-bundle-presentation)
+17. [Benchmark alignment vs approximations](#17-benchmark-alignment-vs-approximations)
+18. [Troubleshooting](#18-troubleshooting)
+19. [Further reading](#19-further-reading)
 
-Based on the official Nutrition5k release:
+---
 
-- `imagery/side_angles/`: 4 camera side-angle videos per dish (`A-D`).
-- `imagery/realsense_overhead/`: overhead RGB + depth images by dish ID.
-- `metadata/ingredient_metadata.csv`: ingredient nutritional metadata.
-- `metadata/dish_metadata_cafe1.csv`, `metadata/dish_metadata_cafe2.csv`: dish-level nutrition labels (`total_calories`, mass, macros, per-ingredient fields).
-- `dish_ids/splits/`: official train/test dish ID split files.
-
-Train/test split design in official benchmark:
-
-- Dish IDs are split so incremental scans of the same plate do not leak across train/test.
-- This project uses those official split files when present.
-- Validation split is created from the official train split using a fixed seed (`--seed`) and `--val_ratio`.
-
-## Expected local dataset layout
-
-Place the extracted dataset as:
-
-```text
-nutrition5k_dataset/
-  imagery/
-    realsense_overhead/
-      dish_XXXXXXXXXX/
-        <rgb file>
-        <depth file>
-  metadata/
-    dish_metadata_cafe1.csv
-    dish_metadata_cafe2.csv
-    ingredient_metadata.csv
-  dish_ids/
-    splits/
-      <train split file>
-      <test split file>
-```
-
-## Download and setup
-
-From the official bucket (example):
+## 1. Quick start
 
 ```bash
-gsutil -m cp -r "gs://nutrition5k_dataset/nutrition5k_dataset" .
-```
-
-Or download the full archive from the official Nutrition5k page and extract it.
-
-Install dependencies:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-## Project files
-
-- `config.py`: central CLI/config object
-- `data_loader.py`: Nutrition5k parsing, split loading, RGB/RGB-D dataset
-- `model.py`: pretrained ResNet18 calorie regressor (RGB + RGB-D mode)
-- `train.py`: train/validation loop, checkpointing, CSV logging
-- `evaluate.py`: Nutrition5k test evaluation (MAE, RMSE) + optional predictions CSV
-- `evaluate_food101.py`: Food-101 official **test** split top-1 / top-k accuracy (requires cls checkpoint)
-- `utils.py`: seed/device/metrics/checkpoint helpers
-- `web_app.py`: local upload-and-predict web demo (Gradio)
-- `scripts/download_more_overhead.py`: incremental overhead-data downloader for mini setups
-
-## Optional: grow mini dataset
-
-If you start with a small subset, you can incrementally download more overhead dishes:
-
-```bash
-python scripts/download_more_overhead.py \
-  --dataset_root /Users/yiouwang/data/nutrition5k_mini \
-  --target_total 1000 \
-  --seed 42
-```
-
-Optional integrity check after downloading:
-
-```bash
-python scripts/check_overhead_integrity.py \
-  --dataset_root /Users/yiouwang/data/nutrition5k_mini
-```
-
-## Full pipeline: expand data and train RGB + RGB-D
-
-If you have roughly 1000 local overhead dishes, a practical next step is to grow to **about 3000** (`--target_total` in the downloader) before training: enough gain to help the model without requiring the full release. The helper script (a) tops up with `gsutil` until the local `realsense_overhead` count reaches that target, then (b) trains **RGB** with `--split_type rgb` and **RGB-D** with `--split_type depth` so each run matches the official list for that modality.
-
-```bash
-chmod +x scripts/run_full_pipeline.sh
-export NUTRITION5K_ROOT="/path/to/nutrition5k_dataset"   # must contain metadata, dish_ids/splits, imagery/
-./scripts/run_full_pipeline.sh
-```
-
-Environment overrides:
-
-- `TARGET_TOTAL=3000` (default) — set lower (e.g. `2000`) if disk is tight; set `SKIP_DOWNLOAD=1` to only train on data you already have.
-- `EPOCHS=40` (default), `BATCH=32` — reduce batch size on CPU or if you hit OOM.
-
-Checkpoints: `outputs_full_rgb/checkpoints/best.pt` and `outputs_full_rgbd/checkpoints/best.pt`. Evaluate test sets with `evaluate.py` using the same `--mode` and `--split_type` as each training run.
-
-## Phase 1: RGB baseline
-
-- Input: overhead RGB only
-- Backbone: pretrained **ResNet-18** only (fixed in code for speed and memory on typical laptops)
-- Head: small MLP regression head
-- Loss: SmoothL1 (default), optional MSE
-- Metrics: MAE (during train/val), MAE + RMSE (test)
-- **Train-only data augmentation** (on by default): random horizontal flip + mild `ColorJitter`; RGB-D mode applies the same flip to depth. Disable with `--no_train_augment`.
-- **Optional** split learning rates: `--backbone_lr` and `--head_lr` together (e.g. `3e-5` and `3e-4`); if omitted, `--lr` applies to the whole model.
-- Default stabilization: `log1p` target training + ReduceLROnPlateau + early stopping
-
-Train:
-
-```bash
 python train.py \
   --dataset_root /path/to/nutrition5k_dataset \
-  --mode rgb \
-  --split_type rgb \
-  --epochs 40 \
-  --batch_size 32 \
+  --mode rgb --split_type rgb --epochs 40 \
   --output_dir outputs_rgb \
-  --loss_type smooth_l1 \
-  --scheduler plateau \
-  --use_log_target \
-  --pretrained
-```
+  --loss_type smooth_l1 --scheduler plateau \
+  --use_log_target --pretrained
 
-Evaluate:
-
-```bash
 python evaluate.py \
   --dataset_root /path/to/nutrition5k_dataset \
-  --mode rgb \
-  --split_type rgb \
+  --mode rgb --split_type rgb \
   --checkpoint_path outputs_rgb/checkpoints/best.pt \
   --output_dir outputs_rgb \
   --save_predictions_csv outputs_rgb/logs/test_predictions.csv
-```
 
-## Phase 2: RGB-D extension
-
-Implemented using a simple, stable approach:
-
-- 4-channel input (`RGB + depth`) to the same ResNet backbone.
-- First conv layer is adapted from pretrained RGB weights; depth channel is initialized from mean RGB filters.
-
-Train:
-
-```bash
-python train.py \
+python scripts/generate_presentation_assets.py \
   --dataset_root /path/to/nutrition5k_dataset \
-  --mode rgbd \
-  --split_type depth \
-  --epochs 40 \
-  --batch_size 32 \
-  --output_dir outputs_rgbd \
-  --loss_type smooth_l1 \
-  --scheduler plateau \
-  --use_log_target \
-  --pretrained
+  --run_dir outputs_rgb \
+  --split_type rgb --val_ratio 0.1 --seed 42
 ```
 
-Evaluate:
+Open **`presentation/index.html`** in a browser after the last step.
 
-```bash
-python evaluate.py \
-  --dataset_root /path/to/nutrition5k_dataset \
-  --mode rgbd \
-  --split_type depth \
-  --checkpoint_path outputs_rgbd/checkpoints/best.pt \
-  --output_dir outputs_rgbd \
-  --save_predictions_csv outputs_rgbd/logs/test_predictions.csv
+---
+
+## 2. Repository layout
+
+| File | Responsibility |
+|------|----------------|
+| `config.py` | `Config` dataclass; `build_arg_parser(train=…)`; `config_from_args`; Food-101 schedule helpers `food101_scheduled_epoch_list`, `compute_food101_epoch_interval`, `food101_schedule_explain`. |
+| `data_loader.py` | CSV calorie maps; split file discovery; `build_split_samples`; `Nutrition5kCalorieDataset`; `create_dataloaders`; Food-101 loaders. |
+| `model.py` | `CalorieRegressor`: torchvision ResNet-18, regression head, optional classifier, RGB-D first conv adaptation. |
+| `train.py` | Training / validation loops; optional Food-101 epochs; checkpoints; `train_log.csv`; `train_summary.json`. |
+| `evaluate.py` | Test-set forward pass; MAE, RMSE, MSE; optional per-dish CSV. |
+| `evaluate_food101.py` | Food-101 **official test** top-1 / top-k (requires classifier in checkpoint). |
+| `utils.py` | Seeds, device, MAE/RMSE, meters, checkpoint paths, CSV logging, predictions CSV, macOS caffeinate helper. |
+| `web_app.py` | Gradio UI, dual checkpoints, MiDaS / heuristic / upload depth, top-K class text. |
+| `app.py` | HF Spaces: optional checkpoint URL download, then `web_app.main()`. |
+| `scripts/download_more_overhead.py` | `gsutil` incremental overhead dish download. |
+| `scripts/check_overhead_integrity.py` | Counts complete/partial overhead folders by fixed filenames. |
+| `scripts/generate_presentation_assets.py` | Figures + tables → `presentation/assets/`. |
+| `presentation/index.html` | Single-page slide hub. |
+| `presentation/MODEL_PIPELINE.md` | Mermaid pipeline doc. |
+| `presentation/README.md` | Short hub usage. |
+
+There is **no** `scripts/run_full_pipeline.sh` in the repo; replicate with the downloader (§12.1) plus explicit `train.py` commands.
+
+---
+
+## 3. Dependencies (`requirements.txt`)
+
+| Package | Used for |
+|---------|-----------|
+| `torch`, `torchvision` | Model, dataloaders, `resnet18`, pretrained weights, Food-101 dataset. |
+| `tqdm` | Progress bars in train/eval. |
+| `Pillow` | Image I/O; `ImageOps.exif_transpose` in web app. |
+| `numpy` | Depth array ops (`data_loader`, `web_app` preview). |
+| `pandas`, `matplotlib` | `generate_presentation_assets.py` only. |
+| `gradio` | `web_app.py`. |
+| `timm` | Declared dependency; **core model uses torchvision ResNet-18 only** (`model.py`). |
+| `opencv-python-headless` | Declared; training path is PIL-based. |
+
+---
+
+## 4. Nutrition5k on-disk layout
+
+Expected under `--dataset_root`:
+
+```text
+metadata/
+  dish_metadata_cafe1.csv
+  dish_metadata_cafe2.csv
+  ingredient_metadata.csv    # unused by train/eval in this repo
+imagery/realsense_overhead/
+  dish_xxxxxxxxxx/
+    <rgb image>              # filename matched by keywords
+    <depth image>            # optional in rgb mode; used in rgbd
+dish_ids/splits/             # optional but recommended for official splits
+  rgb_train_ids.txt / rgb_test_ids.txt
+  depth_train_ids.txt / depth_test_ids.txt
+  …
 ```
 
-## Optional: Food-101 category + confidence (multi-task)
+**Labels:** `_read_calories_map` scans both cafe metadata files. Each CSV row: column 0 = dish id string, column 1 = **`total_calories`** (float). Header row `dish_id` is skipped. Invalid floats skipped.
 
-You can train an additional Food-101 classification head on top of the same backbone so the app outputs both:
-- predicted calories
-- predicted food category candidates with softmax confidence
+**Download example:** `gsutil -m cp -r "gs://nutrition5k_dataset/nutrition5k_dataset" .`
 
-**Food-101 training defaults (quality-oriented):**
-- **Train augmentations** (on by default): `RandomResizedCrop`, horizontal flip, `ColorJitter`, `RandomErasing`, then ImageNet normalization. Disable with `--no_food101_augment`.
-- **Validation**: a reproducible **hold-out slice of the official Food-101 train split** (`--food101_val_ratio`, default `0.1`). The official **test** split is not used during the training loop, so you are not tuning on test labels every epoch.
-- **Label smoothing** (optional): `--cls_label_smoothing 0.05` on the classification loss during Food-101 **train** steps only (validation uses plain cross-entropy for a standard accuracy readout).
-- **Food-101 frequency vs. Nutrition5k** (Nutrition5k still every epoch):
-  - **`--food101_every_n_epochs N`** with `N>0`: run Food-101 on epochs **1, N+1, 2N+1, …** (fixed stride). This **overrides** `--food101_cls_passes` for scheduling.
-  - **`--food101_cls_passes P`** with `P=0` (default): Food-101 **every** epoch. `P>0` with `--epochs E`: about **P** runs total, evenly spaced (e.g. `E=40`, `P=4` → **1, 14, 27, 40**). Use this when you care about “roughly P Food-101 passes” rather than a fixed stride.
-  - At startup, `train.py` prints how many Food-101 steps there are and **which epochs** (truncated if the list is long).
+---
 
-Example:
+## 5. Data loading and splits (`data_loader.py`)
 
-```bash
-python train.py \
-  --dataset_root /path/to/nutrition5k_dataset \
-  --mode rgb \
-  --split_type rgb \
-  --epochs 20 \
-  --output_dir outputs_rgb_food101 \
-  --enable_food101_cls \
-  --food101_root /path/to/food101_root \
-  --food101_download \
-  --cls_batch_size 32 \
-  --cls_loss_weight 1.0 \
-  --cls_label_smoothing 0.05 \
-  --pretrained
+### 5.1 Split file selection (`_locate_split_files`)
+
+- Recursive search under `dish_ids/splits` for `*.csv` and `*.txt`.
+- **`split_type rgb`:** prefers files named `rgb_train_ids.txt` and `rgb_test_ids.txt` (case-insensitive).
+- **`split_type depth`:** prefers `depth_train_ids.txt` / `depth_test_ids.txt`.
+- **`split_type auto`:** if `rgb_train_ids.txt` and `rgb_test_ids.txt` exist, use them; else first file with `train` in name and first with `test` in name.
+
+### 5.2 `build_split_samples`
+
+1. Load calories map; read train/test IDs from files (or fallback §5.3).
+2. **`has_local_rgb`:** train/val pool only includes IDs that have a resolvable RGB file under `imagery/realsense_overhead/<id>/` (`_find_rgb_depth_paths`).
+3. Shuffle available train IDs with `random.Random(seed)`; validation size = `max(1, int(len(available_train_ids) * val_ratio))`; remainder = train. **Test** list is built from official test IDs independently.
+4. **`make_samples`:** skips IDs with no RGB file; depth optional; `_find_rgb_depth_paths` matches keywords (`rgb.png`, `rgb.jpg`, `color`, `depth_raw`, `raw_depth`, `depth`, …).
+
+### 5.3 Fallback without `dish_ids/splits`
+
+If the splits directory is missing, **all** IDs from the calorie map are shuffled with `seed` and split **80% train / 20% test** internally. This is **not** the official benchmark split—ship split files for publication numbers.
+
+### 5.4 Tensor pipeline (`Nutrition5kCalorieDataset`)
+
+- RGB: resize `image_size`, ToTensor, ImageNet normalize.
+- Train augment (Nutrition5k only): 50% hflip on RGB+depth; `ColorJitter` on RGB.
+- **RGB-D:** concat RGB (3×H×W) with depth channel (1×H×W). Missing/unreadable depth → zeros (+ one-time warning per bad path).
+- **`depth_image_to_tensor`:** if max pixel > 255, divide by `max_depth_units` (default 4000); else `/255`. Per-image 1–99 percentile linear stretch to [0,1], clip.
+
+### 5.5 `create_dataloaders`
+
+Returns `(train_loader, val_loader, test_loader)` with `pin_memory=True`, train `shuffle=True`.
+
+### 5.6 Food-101 loaders
+
+- **`create_food101_dataloaders`:** Official `Food101(split="train")`; permuted indices; `food101_val_ratio` held out as val; train uses stronger augment when enabled.
+- **`create_food101_test_dataloader`:** Official **`split="test"`** for `evaluate_food101.py`.
+
+---
+
+## 6. Model (`model.py`)
+
+### 6.1 `CalorieRegressor.__init__`
+
+- `mode`: `"rgb"` or `"rgbd"`.
+- `pretrained`: if True, `resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)`.
+- `num_classes`: if > 0, builds `cls_head`; else `cls_head` is `None`.
+- Replaces `backbone.fc` with `Identity` (512-D features).
+- **Regression head:** `512→128` ReLU Dropout(0.2) `→1`.
+- **Classifier head (optional):** `512→256` ReLU Dropout(0.2) `→num_classes`.
+
+### 6.2 RGB-D stem
+
+When `mode=="rgbd"`, `conv1` becomes `Conv2d(4, 64, kernel_size=7, stride=2, padding=3, bias=False)`. Weights: channels 0–2 copy pretrained RGB; channel 3 = **mean of RGB filters** over input channels.
+
+### 6.3 Methods
+
+- **`forward`:** `reg_head(backbone(x))` — calorie branch only.
+- **`classify`:** requires `cls_head`; `cls_head(backbone(x))`.
+- **`has_classifier`:** property, True if `cls_head` is not None.
+
+---
+
+## 7. Configuration CLI (`config.py`)
+
+### 7.1 Training-only arguments (`build_arg_parser(train=True)`)
+
+Core: `--dataset_root` (required), `--output_dir`, `--image_size`, `--batch_size`, `--num_workers`, `--mode {rgb,rgbd}`, `--split_type {auto,rgb,depth}`, `--seed`, `--epochs`, `--lr`, `--weight_decay`, `--val_ratio`, `--max_depth_units`, `--device`.
+
+**Pretrained ResNet:** `--pretrained` / `--no_pretrained` (default: **pretrained on** if neither flag).
+
+**Target transform:** `--use_log_target` / `--no_log_target` (default: **log1p on** if neither flag).
+
+**Loss / schedule / early stop:** `--loss_type {smooth_l1,mse}`, `--scheduler {none,plateau}`, `--scheduler_patience`, `--scheduler_factor`, `--early_stop_patience`, `--min_improve_delta`.
+
+**Augmentation:** `--no_train_augment` disables Nutrition5k train flips/jitter.
+
+**Per-group LR:** `--backbone_lr` and `--head_lr` must be **set together** (otherwise `ValueError`); else single `--lr` for all parameters.
+
+**Food-101 multi-task:** `--enable_food101_cls`, `--food101_root`, `--food101_download`, `--cls_loss_weight`, `--cls_batch_size`, `--no_food101_augment`, `--food101_val_ratio`, `--cls_label_smoothing`, `--food101_cls_passes`, `--food101_every_n_epochs`.
+
+**Food-101 schedule:** `food101_epoch_interval` is computed: if `food101_every_n_epochs > 0` → stride `max(1, that)`; else if `food101_cls_passes <= 0` → every epoch; else ~`P` evenly spaced epochs over `epochs` (see `compute_food101_epoch_interval`).
+
+### 7.2 Evaluation-only arguments (`build_arg_parser(train=False)`)
+
+- `--checkpoint_path` (required), `--save_predictions_csv` (optional path).
+
+---
+
+## 8. Training (`train.py`)
+
+### 8.1 Startup
+
+`config_from_args` → `ensure_paths` → `set_seed` → optional **`prevent_system_sleep_while_running`** (macOS `caffeinate -dims -w <pid>`) → dataloaders → optional Food-101 loaders + schedule print → model/optimizer/loss/scheduler → **`save_run_config`** → epoch loop.
+
+### 8.2 `run_epoch` (Nutrition5k)
+
+- Forward `preds = model(images)`.
+- Loss target: `log1p(targets)` if `use_log_target`, else raw calories; criterion SmoothL1 or MSE.
+- Reported MAE in **kcal**: `expm1(clamp(pred, max=12))` then clamp ≥0, compare to `targets`.
+
+### 8.3 Food-101 epochs
+
+When `enable_food101_cls` and `(epoch - 1) % food101_epoch_interval == 0`:
+
+- `run_cls_epoch` train (with optional label smoothing) and val (no smoothing).
+- `CrossEntropy * cls_loss_weight`; accuracy = mean correct.
+
+**Epoch 1 always matches** `(epoch-1) % interval == 0`, so Food-101 runs on the first epoch whenever enabled and a classifier exists.
+
+### 8.4 Logging row (`train_log.csv`)
+
+Columns always include `timestamp`, `epoch`, `train_loss`, `train_mae`, `val_loss`, `val_mae`, `lr`. When Food-101 is enabled, **`food101_train_loss`, `food101_train_acc`, `food101_val_loss`, `food101_val_acc`** are written every epoch: numeric when that epoch ran Food-101, **empty cells** when the schedule skipped Food-101—so CSV columns stay aligned for plotting tools.
+
+### 8.5 Checkpoints
+
+Each epoch saves **`checkpoints/last.pt`**. If `val_mae` improves by at least `min_improve_delta`, saves **`checkpoints/best.pt`**.
+
+**`state` dict keys:** `epoch`, `model_state_dict`, `optimizer_state_dict`, `val_mae`, `mode`, `split_type`, `image_size`, `max_depth_units`, `loss_type`, `use_log_target`, `has_classifier`, `food101_classes`, `cls_label_smoothing`, `food101_epoch_interval`, `food101_cls_passes`, `food101_every_n_epochs`.
+
+### 8.6 End of training
+
+Writes **`logs/train_summary.json`**: `best_val_mae`, `best_epoch`, `mode`, `split_type`, `loss_type`, `use_log_target`, `has_classifier`.
+
+---
+
+## 9. Nutrition5k test evaluation (`evaluate.py`)
+
+1. `create_dataloaders(..., val_ratio=0.1, augment_train=False)` — **note:** `val_ratio` is **hardcoded to `0.1`** here; only the **test** split is used for metrics, so this matches training when training also used `val_ratio=0.1` for the train/val carve-out from the same official train list.
+2. Load checkpoint; verify `checkpoint["mode"]` matches `--mode` and `checkpoint["split_type"]` matches `--split_type` (prevents evaluating an RGB-D checkpoint as RGB).
+3. `use_log_target` from checkpoint (fallback CLI).
+4. Aggregate preds/targets; **MAE**, **RMSE**, **MSE** in kcal space (same `expm1` path as training).
+5. Prints JSON; writes **`logs/eval_metrics.json`** under `--output_dir`.
+6. Optional **`write_predictions_csv`**: columns `dish_id`, `predicted_calories`, `target_calories`, `abs_error`.
+
+---
+
+## 10. Food-101 test accuracy (`evaluate_food101.py`)
+
+Requires `has_classifier` and non-empty `food101_classes` in the checkpoint. Loads **`Food101(split="test")`**; asserts `ds.classes == food101_classes` (same root/version as training). RGB-D batches are **zero-padded to 4 channels** via `_expand_for_rgbd_if_needed`. Reports **`top1_accuracy`** and **`top{k}_accuracy`** (dynamic key name) for `k = min(top_k, 101)`. Optional **`logs/food101_test_metrics.json`** under `--output_dir`.
+
+---
+
+## 11. Utilities (`utils.py`)
+
+| Symbol | Behavior |
+|--------|-----------|
+| `prevent_system_sleep_while_running` | macOS only: spawns `caffeinate -dims -w <pid>`, terminates on exit. |
+| `set_seed` | Python/NumPy/torch seeds; `cudnn.deterministic=True`, `benchmark=False`. |
+| `pick_device` | `cuda` if available else CPU; `--device` overrides. |
+| `mae`, `rmse` | Mean absolute error, root mean square error on tensors. |
+| `AverageMeter` | Running weighted average for loss/MAE meters. |
+| `save_checkpoint` | `output_dir/checkpoints/<filename>.pt`. |
+| `log_epoch` | Append one CSV row to `logs/train_log.csv` (header on first create). |
+| `save_run_config` | `logs/config.json` from `dataclasses.asdict(cfg)` + UTC timestamp. |
+| `write_predictions_csv` | Eval predictions export. |
+
+---
+
+## 12. Scripts under `scripts/`
+
+### 12.1 `scripts/download_more_overhead.py`
+
+- Requires **`dish_ids/splits`** with **`depth_train`** and **`depth_test`** in filenames.
+- Runs `gsutil ls` on `gs://nutrition5k_dataset/.../realsense_overhead/`; parses trailing `dish_<digits>/`.
+- Filters candidates to IDs in split files and not yet local.
+- Until local dish folder count ≥ `--target_total` (default 1000), copies `need_train = int(need * train_ratio)` from train candidates and the rest from test candidates (`--train_ratio` default 0.8 of the *download budget*).
+- Uses `gsutil -m cp -r` per dish. Requires **`gsutil`** and network access to GCS.
+
+### 12.2 `scripts/check_overhead_integrity.py`
+
+For each subdirectory of `imagery/realsense_overhead/`, checks presence of **`rgb.png`**, **`depth_raw.png`**, **`depth_color.png`** exactly. Reports totals and up to 20 partial examples. **Note:** training code accepts **other** RGB/depth filenames via keywords; a “partial” here does not always mean training will skip the dish—only that this strict triplet is missing.
+
+### 12.3 `scripts/generate_presentation_assets.py`
+
+- **Inputs:** `--dataset_root` (must exist), `--run_dir` (parent must exist; typically your `output_dir` with `logs/`), matching `--split_type`, `--val_ratio`, `--seed` for EDA alignment; optional `--predictions_csv` or default `run_dir/logs/test_predictions.csv`.
+- **Default output:** `presentation/assets/` (override `--assets_dir`).
+- **Outputs:** `eda_calories_and_counts.png`, `eda_calories_summary.csv`, `eda_calories_summary_table.png`, `training_curves.png` (if `train_log.csv` exists), `metrics_config_summary.csv`, `metrics_one_row_summary.csv`, `metrics_one_row_table.png`, `test_predictions_scatter_residuals.png` (if predictions CSV exists), `metrics_dashboard.html`, copies `from_run_eval_metrics.json`, `from_run_train_summary.json`, `from_run_config.json`, `index.json`.
+- Prints path to **`presentation/index.html`** to open in a browser. **No training.**
+
+---
+
+## 13. Gradio web app (`web_app.py`)
+
+### 13.1 CLI
+
+| Argument | Purpose |
+|----------|---------|
+| `--checkpoint_rgb`, `--checkpoint_rgbd` | Paths to `.pt` files (at least one required, or legacy `--checkpoint_path` + `--mode`). |
+| `--image_size`, `--max_depth_units` | Fallbacks if missing from checkpoint (checkpoint values win when present). |
+| `--host`, `--port` | `demo.launch(server_name, server_port)`. |
+| `--auto_depth_backend {midas,heuristic}` | Default auto-depth backend for RGB-D when MiDaS load fails, falls back to heuristic. |
+| `--cls_top_k`, `--cls_conf_threshold` | Top-K softmax lines in text output; if none above threshold, still shows top-1. |
+
+### 13.2 `Predictor`
+
+- Loads checkpoint; builds `CalorieRegressor(pretrained=False, num_classes=…)`; `eval()` mode.
+- RGB preprocessing: EXIF transpose, resize, ImageNet normalize (same as training eval path for RGB).
+- **RGB-D depth modes:** MiDaS `DPT_Hybrid` via `torch.hub` + `dpt_transform`; heuristic = grayscale luminance; real upload uses `depth_image_to_tensor` with checkpoint `max_depth_units`.
+- **Calorie decode:** `expm1` + clamp if `use_log_target`.
+- **Classes:** `classify` + softmax; filters by `cls_conf_threshold`.
+
+### 13.3 UI
+
+`AppRuntime.predict` switches between loaded predictors; RGB-D shows optional depth preview controls.
+
+---
+
+## 14. Hugging Face entry (`app.py`)
+
+Used as **`app_file`** in Space metadata.
+
+1. Reads **`RGB_CKPT_URL`** / **`RGBD_CKPT_URL`** env vars; if set, downloads to **`outputs_food101_4passes/checkpoints/best.pt`** and **`outputs_train_rgbd_food101/checkpoints/best.pt`** respectively (relative to process cwd).
+2. Builds `sys.argv` for `web_app.main()`: `--checkpoint_rgb` / `--checkpoint_rgbd` when files exist, `--host 0.0.0.0`, `--port` from **`PORT`** env (default `7860`).
+3. Raises **`RuntimeError`** if no checkpoint path ends up in argv.
+
+---
+
+## 15. Run artifacts: directories and files
+
+Under each `--output_dir` (a valid **`--run_dir`** for the presentation script):
+
+```text
+checkpoints/
+  last.pt
+  best.pt
+logs/
+  config.json           # full training Config + timestamp
+  train_log.csv         # per-epoch metrics (+ Food-101 columns when enabled)
+  train_summary.json    # written at end of training
+  eval_metrics.json     # from evaluate.py
+  test_predictions.csv  # optional, from evaluate.py
+  food101_test_metrics.json  # optional, from evaluate_food101.py
 ```
 
-**Official Food-101 test accuracy** (after training with `--enable_food101_cls`):
+`.gitignore` ignores `outputs*/`, `*.pt`, and root-level `logs/` patterns—local runs may be untracked by default.
+
+---
+
+## 16. Presentation bundle (`presentation/`)
+
+| Path | Role |
+|------|------|
+| `index.html` | Hub: Mermaid (CDN), iframe `assets/metrics_dashboard.html`, embedded PNGs, CSV/JSON links. |
+| `MODEL_PIPELINE.md` | Same pipeline narrative + Mermaid for GitHub / export. |
+| `README.md` | Short refresh instructions. |
+| `assets/` | Generator output; safe to zip for slides. |
+
+**Offline:** Mermaid in `index.html` needs network for CDN; export static images via [mermaid.live](https://mermaid.live) if needed.
+
+---
+
+## 17. Benchmark alignment vs approximations
+
+**Aligned:** official dish calorie labels from cafe metadata CSVs; official train/test ID files when present; overhead realsense folder as image source.
+
+**Engineering / paper gap:** validation is a random hold-out from **official train** IDs (seeded); RGB/depth filenames resolved by **keyword** heuristics; ResNet-18 + shallow head is a **compact baseline**, not a full Nutrition5k paper system; RGB-D fusion is **early concat**, not learned fusion stacks.
+
+---
+
+## 18. Troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `ValueError` checkpoint mode / split_type mismatch in `evaluate.py` | `--mode` / `--split_type` disagree with checkpoint; match training flags. |
+| `evaluate_food101.py` class list mismatch | Wrong `--food101_root` or different torchvision cache than training. |
+| Food-101 cls `ValueError` on evaluate | Train with `--enable_food101_cls` first. |
+| `gsutil` errors in downloader | GCS credentials / `gsutil` not installed; bucket path changed. |
+| MiDaS warning in web app | Torch hub download blocked; app falls back to heuristic depth. |
+| Empty train loader | No local overhead RGB for train IDs—run downloader or fix paths. |
+| `OSError: read-only file system: '/path'` when generating slides | You used README **placeholder** paths; pass real `--dataset_root` and `--run_dir`. |
+
+---
+
+## 19. Further reading
+
+- Nutrition5k: [google-research-datasets/Nutrition5k](https://github.com/google-research-datasets/Nutrition5k)
+- RGB-D nutrition example: [SightVanish/NutritionEstimation](https://github.com/SightVanish/NutritionEstimation)
+- Structured pipeline reference: [Lyce24/NutriFusionNet](https://github.com/Lyce24/NutriFusionNet)
+
+---
+
+## Appendix A — Example commands (RGB, RGB-D, Food-101)
+
+**RGB train/eval** — use `--split_type rgb` with `--mode rgb`.
+
+**RGB-D train/eval** — use `--split_type depth` with `--mode rgbd` so split IDs align with depth modality lists from the paper setup.
+
+**Food-101 auxiliary train** — add `--enable_food101_cls --food101_root <Food101_root> [--food101_download]`.
+
+**Food-101 test report:**
 
 ```bash
 python evaluate_food101.py \
   --checkpoint_path outputs_rgb_food101/checkpoints/best.pt \
-  --food101_root /path/to/food101_root \
+  --food101_root /path/to/food-101 \
   --mode rgb \
   --output_dir outputs_rgb_food101
 ```
 
-Uses the torchvision **test** split only (no augmentation). For RGB-D checkpoints, pass `--mode rgbd` (Food-101 images are still RGB; depth is zero-padded like in training). Optional: `--top_k 5` (default), `--food101_download` if data is missing.
-
-Note: Food-101 is a single-label dataset. The app can show multiple high-confidence class candidates (top-K), but that is candidate ranking, not true multi-label supervision.
-
-## Reproducibility details
-
-- Fixed random seed with `--seed` for Python, NumPy, and PyTorch.
-- No hardcoded dataset paths; use `--dataset_root`.
-- Configurable mode (`rgb` or `rgbd`), batch size, image size, workers, LR, epochs.
-- Configurable split family via `--split_type` (`rgb`, `depth`, or `auto`).
-- Checkpoint stores `mode` and `split_type`; evaluation validates both to avoid accidental mismatch.
-- Configurable optimization behavior (`--loss_type`, `--scheduler`, `--use_log_target`, early stopping).
-- Logging:
-  - Epoch metrics: `output_dir/logs/train_log.csv`
-  - Training config: `output_dir/logs/config.json`
-  - Eval metrics: `output_dir/logs/eval_metrics.json`
-- Checkpoints:
-  - latest: `output_dir/checkpoints/last.pt`
-  - best by validation MAE: `output_dir/checkpoints/best.pt`
-
-## Web demo: upload your own food image
-
-Install/update dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run one web app with both checkpoints loaded:
+**Gradio (two checkpoints):**
 
 ```bash
 python web_app.py \
   --checkpoint_rgb outputs_food101_4passes/checkpoints/best.pt \
   --checkpoint_rgbd outputs_train_rgbd_food101/checkpoints/best.pt \
-  --host 127.0.0.1 \
-  --port 7860
+  --host 127.0.0.1 --port 7860
 ```
-
-Then open [http://127.0.0.1:7860](http://127.0.0.1:7860).
-
-In the UI:
-- Choose `rgb` or `rgbd` from the **Inference Mode** dropdown (no terminal mode switch needed).
-- The app always preprocesses uploaded RGB photos automatically (EXIF correction, resize, normalization).
-
-### RGB-D depth source options (dropdown)
-
-When `rgbd` mode is selected, choose one depth source in UI:
-
-1. `Auto from RGB (MiDaS)`  
-   Uses MiDaS monocular depth estimation.
-2. `Auto from RGB (Heuristic)`  
-   Uses grayscale pseudo-depth fallback.
-3. `Upload real depth image`  
-   Upload a real aligned depth image (PNG preferred) and the app converts it to model input format.
-
-For best results, use overhead food photos similar to Nutrition5k capture style.
-
-## What is official benchmark-aligned vs approximation
-
-Benchmark-aligned:
-
-- Uses official Nutrition5k dish metadata CSV labels (`total_calories`).
-- Uses official train/test split files when available in `dish_ids/splits`.
-- Uses overhead RGB(-D) imagery in `imagery/realsense_overhead`.
-
-Approximation (engineering choices in this baseline):
-
-- Validation split is derived from train split (official dataset gives train/test, not fixed val).
-- Filename matching for RGB/depth files is robust by keyword because exact file naming can vary in local exports.
-- Model architecture is a compact ResNet18 regressor baseline, not the full Nutrition5k paper model pipeline.
-- Depth handling uses single-channel normalized depth concatenated to RGB (simple and stable, not advanced fusion).
