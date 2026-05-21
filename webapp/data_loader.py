@@ -179,7 +179,7 @@ def build_split_samples(
         return rgb_path is not None
 
     # Build train/val split only from dishes that actually exist locally.
-    # This avoids empty-train failures on mini/subsampled downloads.
+    # Only dishes with a local overhead RGB are used (skips missing downloads).
     rng = random.Random(seed)
     available_train_ids = [x for x in train_ids if x in calorie_map and has_local_rgb(x)]
     rng.shuffle(available_train_ids)

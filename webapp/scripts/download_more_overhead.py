@@ -21,7 +21,10 @@ def read_ids(path: Path) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Incrementally download Nutrition5k overhead dishes.")
+    parser = argparse.ArgumentParser(
+        description="Incrementally download Nutrition5k overhead dishes.",
+        epilog="For full/resume downloads prefer: python scripts/download_nutrition5k.py --tier overhead --only_missing",
+    )
     parser.add_argument(
         "--dataset_root",
         type=str,
@@ -32,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         "--target_total",
         type=int,
         default=1000,
-        help="Stop when local overhead dish folder count reaches this value.",
+        help="Stop when local overhead dish folder count reaches this value. Use 0 for all missing in splits.",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--train_ratio", type=float, default=0.8)
@@ -82,20 +85,23 @@ def main() -> None:
 
     current = len(local_existing)
     print(f"current_dish_count = {current}")
-    if current >= args.target_total:
-        print(f"Already >= target_total ({args.target_total}).")
-        return
-
-    need = args.target_total - current
-    need_train = int(need * args.train_ratio)
-    need_test = need - need_train
-
     rng = random.Random(args.seed)
-    rng.shuffle(train_candidates)
-    rng.shuffle(test_candidates)
-
-    selected = train_candidates[:need_train] + test_candidates[:need_test]
-    rng.shuffle(selected)
+    all_missing = train_candidates + test_candidates
+    if args.target_total <= 0:
+        selected = list(all_missing)
+        rng.shuffle(selected)
+        print(f"target_total=0 -> downloading all missing split dishes: {len(selected)}")
+    else:
+        if current >= args.target_total:
+            print(f"Already >= target_total ({args.target_total}).")
+            return
+        need = args.target_total - current
+        need_train = int(need * args.train_ratio)
+        need_test = need - need_train
+        rng.shuffle(train_candidates)
+        rng.shuffle(test_candidates)
+        selected = train_candidates[:need_train] + test_candidates[:need_test]
+        rng.shuffle(selected)
 
     print(f"remote_overhead_available = {len(existing_remote)}")
     print(f"selected_to_download = {len(selected)}")

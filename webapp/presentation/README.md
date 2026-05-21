@@ -1,15 +1,19 @@
 # Presentation materials
 
-## PPT asset folder (recommended)
+Figures are generated from training runs on the **full Nutrition5k overhead dataset** (`~/data/nutrition5k_dataset` or your `--dataset_root`).
 
-Run the generator:
+## Folders
 
-- **`presentation/slide_picks/`** — **精选**（约 15–20 张），按编号排序，优先看这个文件夹挑 PPT 图。
-- **`presentation/slide_assets/`** — 完整素材库（全部 PNG/CSV）。
+| Path | Use |
+|------|-----|
+| **`slide_picks/`** | Curated, numbered PNGs for PowerPoint — start here. |
+| **`slide_assets/`** | Full export (EDA, all runs, CSV/JSON). |
+
+## Regenerate
 
 ```bash
 python scripts/generate_presentation_assets.py \
-  --dataset_root "/path/to/nutrition5k_dataset" \
+  --dataset_root ~/data/nutrition5k_dataset \
   --run_dir outputs_train_rgbd_food101 \
   --extra_run_dirs outputs_food101_4passes \
   --split_type depth \
@@ -17,11 +21,8 @@ python scripts/generate_presentation_assets.py \
   --seed 42
 ```
 
-See **`slide_assets/README.md`** after generation for a full file index.
+Refreshes both `slide_assets/` and `slide_picks/`. See `slide_assets/README.md` for the file index.
 
-## Other paths
+## Pipeline diagram
 
-| Path | What it is |
-|------|----------------|
-| **`slide_assets/`** | **Generated** figures + tables for slides (default output). |
-| **`MODEL_PIPELINE.md`** | Mermaid pipeline; also copied into `slide_assets/` when you regenerate. |
+`MODEL_PIPELINE.md` — Mermaid source; export PNG via [mermaid.live](https://mermaid.live) if needed.
