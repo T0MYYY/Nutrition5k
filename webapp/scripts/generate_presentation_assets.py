@@ -786,25 +786,25 @@ def _write_manifest(out_dir: Path, written: List[str], meta: Dict[str, Any]) -> 
 
 # (source under slide_assets, dest filename, one-line note for README)
 CURATED_PICKS: List[Tuple[str, str, str]] = [
-    ("eda_calories_and_counts.png", "01_data_split_and_calorie_distribution.png", "划分后各 split 样本数 + 热量密度分布"),
-    ("eda_calories_summary_table.png", "02_data_calorie_stats_table.png", "train/val/test 热量统计表"),
-    ("eda_depth_availability.png", "03_data_depth_coverage.png", "本地 depth 文件覆盖率（RGB-D 相关）"),
-    ("eda_sample_dishes_grid.png", "04_data_sample_dishes.png", "随机样例俯拍图 + 标签热量"),
-    ("pipeline_end_to_end.png", "05_pipeline_end_to_end.png", "数据 → 预处理 → ResNet → 输出"),
-    ("model_architecture_rgb.png", "06_model_architecture_RGB.png", "RGB 模型结构示意"),
-    ("model_architecture_rgbd.png", "07_model_architecture_RGBD.png", "RGB-D 四通道模型结构示意"),
-    ("metrics_all_runs_table.png", "08_metrics_all_models_table.png", "各次训练：val/test MAE、best epoch 等"),
-    ("metrics_test_mae_rmse_bars.png", "09_metrics_test_mae_rmse_bars.png", "测试集 MAE / RMSE 柱状对比"),
-    ("metrics_all_runs.csv", "08_metrics_all_models.csv", "上表原始数据（可贴 Excel）"),
-    ("training_curves.png", "10_train_curves_RGBD.png", "主 run（RGB-D）：loss + val MAE"),
-    ("outputs_food101_4passes_training_curves.png", "11_train_curves_RGB.png", "对比 run（RGB）：loss + val MAE"),
-    ("training_food101_accuracy.png", "12_train_food101_aux_accuracy.png", "Food-101 辅助分类准确率"),
-    ("primary_test_scatter_residuals.png", "20_test_scatter_RGBD.png", "RGB-D 测试集：预测 vs 真值 + 残差"),
-    ("outputs_food101_4passes_test_scatter_residuals.png", "21_test_scatter_RGB.png", "RGB 测试集：预测 vs 真值 + 残差"),
-    ("primary_test_error_by_calorie_bin.png", "22_test_error_by_calorie_bin_RGBD.png", "RGB-D：按真值热量分箱的平均误差"),
-    ("outputs_food101_4passes_test_error_by_calorie_bin.png", "23_test_error_by_calorie_bin_RGB.png", "RGB：按热量分箱的平均误差"),
-    ("primary_test_abs_error_cdf.png", "24_test_error_cdf_RGBD.png", "RGB-D：绝对误差累积分布"),
-    ("primary_test_worst_errors_table.png", "25_test_worst_errors_RGBD.png", "RGB-D：误差最大的若干道菜"),
+    ("eda_calories_and_counts.png", "01_data_split_and_calorie_distribution.png", "Split counts + calorie density (subset on disk)"),
+    ("eda_calories_summary_table.png", "02_data_calorie_stats_table.png", "Calorie stats table per split"),
+    ("eda_depth_availability.png", "03_data_depth_coverage.png", "Local depth file coverage (RGB-D)"),
+    ("eda_sample_dishes_grid.png", "04_data_sample_dishes.png", "Sample overhead RGB dishes + labels"),
+    ("pipeline_end_to_end.png", "05_pipeline_end_to_end.png", "End-to-end pipeline diagram"),
+    ("model_architecture_rgb.png", "06_model_architecture_RGB.png", "Baseline architecture (RGB)"),
+    ("model_architecture_rgbd.png", "07_model_architecture_RGBD.png", "Baseline architecture (RGB-D)"),
+    ("metrics_all_runs_table.png", "08_metrics_all_models_table.png", "Val/test MAE, best epoch — all runs"),
+    ("metrics_test_mae_rmse_bars.png", "09_metrics_test_mae_rmse_bars.png", "Test MAE / RMSE bar chart"),
+    ("metrics_all_runs.csv", "08_metrics_all_models.csv", "Metrics table (CSV)"),
+    ("training_curves.png", "10_train_curves_RGBD.png", "Primary run (RGB-D): loss + val MAE"),
+    ("outputs_food101_4passes_training_curves.png", "11_train_curves_RGB.png", "Comparison run (RGB): loss + val MAE"),
+    ("training_food101_accuracy.png", "12_train_food101_aux_accuracy.png", "Food-101 auxiliary accuracy"),
+    ("primary_test_scatter_residuals.png", "20_test_scatter_RGBD.png", "RGB-D test: pred vs truth + residuals"),
+    ("outputs_food101_4passes_test_scatter_residuals.png", "21_test_scatter_RGB.png", "RGB test: pred vs truth + residuals"),
+    ("primary_test_error_by_calorie_bin.png", "22_test_error_by_calorie_bin_RGBD.png", "RGB-D: mean |error| by calorie bin"),
+    ("outputs_food101_4passes_test_error_by_calorie_bin.png", "23_test_error_by_calorie_bin_RGB.png", "RGB: mean |error| by calorie bin"),
+    ("primary_test_abs_error_cdf.png", "24_test_error_cdf_RGBD.png", "RGB-D: CDF of absolute error"),
+    ("primary_test_worst_errors_table.png", "25_test_worst_errors_RGBD.png", "RGB-D: largest test errors"),
 ]
 
 
@@ -818,13 +818,14 @@ def _build_curated_picks(slide_assets_dir: Path, picks_dir: Path) -> List[str]:
 
     copied: List[str] = []
     readme_rows: List[str] = [
-        "# 精选可视化（PPT 快速挑选）",
+        "# Curated slide figures",
         "",
-        "从 `slide_assets/` 自动复制的 **最有用** 图/表，文件名按推荐放映顺序编号。",
-        "重新运行 `generate_presentation_assets.py` 会刷新本目录。",
+        "Copied from `slide_assets/` for PowerPoint. Numbered in recommended presentation order.",
+        "Regenerate with `scripts/generate_presentation_assets.py`.",
+        "Pipeline context: [docs/RESEARCH_PIPELINE.md](../docs/RESEARCH_PIPELINE.md).",
         "",
-        "| 文件 | 说明 |",
-        "|------|------|",
+        "| File | Description |",
+        "|------|-------------|",
     ]
     for src_name, dst_name, note in CURATED_PICKS:
         src = slide_assets_dir / src_name
@@ -838,12 +839,12 @@ def _build_curated_picks(slide_assets_dir: Path, picks_dir: Path) -> List[str]:
     readme_rows.extend(
         [
             "",
-            "## 对应训练目录",
+            "## Run mapping",
             "",
-            "- **RGB-D（主 run）**：`outputs_train_rgbd_food101` → 文件名含 `RGBD` / `10_` / `20_`–`25_`",
-            "- **RGB（对比）**：`outputs_food101_4passes` → 文件名含 `RGB` / `11_` / `21_`–`23_`",
+            "- **RGB-D (primary):** `outputs_train_rgbd_food101` — files `10_*`, `20_*`–`25_*`",
+            "- **RGB (comparison):** `outputs_food101_4passes` — files `11_*`, `21_*`–`23_*`",
             "",
-            "完整素材库见上一级目录 `slide_assets/`。",
+            "Full asset library: `../slide_assets/`.",
         ]
     )
     (picks_dir / "README.md").write_text("\n".join(readme_rows), encoding="utf-8")

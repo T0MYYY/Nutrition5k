@@ -14,7 +14,7 @@ End-to-end documentation for this codebase: **data layout**, **configuration**, 
 
 **One-line pipeline:** `overhead image → ResNet-18 → MLP head → calories (kcal)` (+ optional Food-101 `classify` head).
 
-**Dataset (current setup):** Training and evaluation use the **full Nutrition5k overhead split** available on the official GCS bucket (~**3,490** `realsense_overhead` dishes with official `dish_ids/splits/`), not a fixed 1k mini subset. Point `--dataset_root` at your local copy (e.g. `~/data/nutrition5k_dataset`). See [§4](#4-nutrition5k-on-disk-layout) and **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**.
+**Research pipeline:** **Stage 0** — download official metadata/splits + a **storage-limited overhead subset** → **Stage 1** — ResNet-18 **baseline** (this repo) with fixed official **test** MAE/RMSE → **Stage 2** — **VLM** (planned) on the **same test set**. Full diagram: **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**. Justification: **[docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)**. Download: **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**.
 
 **Live Space:** [https://austinwang10-food-calorie-app.hf.space/](https://austinwang10-food-calorie-app.hf.space/)
 
@@ -26,6 +26,7 @@ End-to-end documentation for this codebase: **data layout**, **configuration**, 
 2. [Repository layout](#2-repository-layout)
 3. [Dependencies (`requirements.txt`)](#3-dependencies-requirementstxt)
 4. [Nutrition5k on-disk layout](#4-nutrition5k-on-disk-layout)
+   - [Dataset scope (subset justification)](#dataset-scope-subset-justification)
 5. [Data loading and splits (`data_loader.py`)](#5-data-loading-and-splits-data_loaderpy)
 6. [Model (`model.py`)](#6-model-modelpy)
 7. [Configuration CLI (`config.py`)](#7-configuration-cli-configpy)
@@ -41,41 +42,47 @@ End-to-end documentation for this codebase: **data layout**, **configuration**, 
 17. [Benchmark alignment vs approximations](#17-benchmark-alignment-vs-approximations)
 18. [Troubleshooting](#18-troubleshooting)
 19. [Further reading](#19-further-reading)
+20. [Documentation (`docs/`)](#documentation-docs)
 
 ---
 
 ## 1. Quick start
 
-**Prerequisites:** Install [Google Cloud SDK](https://cloud.google.com/storage/docs/gsutil_install) (`gsutil`) and download the dataset once (overhead + metadata; see [docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)):
+**Prerequisites:** Install [Google Cloud SDK](https://cloud.google.com/storage/docs/gsutil_install) (`gsutil`) and download **as much overhead data as your disk allows** (metadata + splits are small; imagery is large—see [docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)):
 
 ```bash
+# Example: partial download (legacy cap) or use download_nutrition5k.py --only_missing
 python scripts/download_nutrition5k.py \
-  --dataset_root ~/data/nutrition5k_dataset \
-  --tier essentials overhead
+  --dataset_root ~/data/nutrition5k_mini \
+  --tier essentials
+
+python scripts/download_more_overhead.py \
+  --dataset_root ~/data/nutrition5k_mini \
+  --target_total 3000
 ```
 
-Then train / evaluate (paths below assume `~/data/nutrition5k_dataset`):
+Then train / evaluate (use **your** `--dataset_root` path):
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 python train.py \
-  --dataset_root ~/data/nutrition5k_dataset \
+  --dataset_root ~/data/nutrition5k_mini \
   --mode rgb --split_type rgb --epochs 40 \
   --output_dir outputs_rgb \
   --loss_type smooth_l1 --scheduler plateau \
   --use_log_target --pretrained
 
 python evaluate.py \
-  --dataset_root ~/data/nutrition5k_dataset \
+  --dataset_root ~/data/nutrition5k_mini \
   --mode rgb --split_type rgb \
   --checkpoint_path outputs_rgb/checkpoints/best.pt \
   --output_dir outputs_rgb \
   --save_predictions_csv outputs_rgb/logs/test_predictions.csv
 
 python scripts/generate_presentation_assets.py \
-  --dataset_root ~/data/nutrition5k_dataset \
+  --dataset_root ~/data/nutrition5k_mini \
   --run_dir outputs_rgb \
   --split_type rgb --val_ratio 0.1 --seed 42
 ```
@@ -103,7 +110,9 @@ Slide figures land in **`presentation/slide_picks/`** (curated) and **`presentat
 | `scripts/generate_presentation_assets.py` | Figures + tables → `presentation/slide_assets/` and `slide_picks/`. |
 | `presentation/MODEL_PIPELINE.md` | Mermaid pipeline doc. |
 | `presentation/README.md` | Presentation / slide export usage. |
-| `docs/DOWNLOAD_NUTRITION5K.md` | Full-dataset download guide (GCS). |
+| `docs/RESEARCH_PIPELINE.md` | **End-to-end logical flow** (data → baseline → VLM, evaluation protocol). |
+| `docs/DATA_SCOPE.md` | Subset + baseline + VLM justification for reviewers. |
+| `docs/DOWNLOAD_NUTRITION5K.md` | GCS download (full or incremental). |
 
 There is **no** `scripts/run_full_pipeline.sh` in the repo; use **`download_nutrition5k.py`** (§12.1) then `train.py` / `evaluate.py`.
 
@@ -126,9 +135,7 @@ There is **no** `scripts/run_full_pipeline.sh` in the repo; use **`download_nutr
 
 ## 4. Nutrition5k on-disk layout
 
-**Scope:** This project is documented and tested against the **complete overhead release** on `gs://nutrition5k_dataset` (~3.5k dishes with overhead RGB-D). Paper metadata lists ~5k dishes; not every ID has overhead imagery. Training uses every dish that has a local RGB file and appears in the official split files.
-
-Expected under `--dataset_root` (default name: `nutrition5k_dataset`):
+Expected under `--dataset_root` (e.g. `nutrition5k_mini` on a laptop, or `nutrition5k_dataset` when disk allows):
 
 ```text
 metadata/
@@ -147,17 +154,11 @@ dish_ids/splits/             # required for official benchmark splits
 
 **Labels:** `_read_calories_map` scans both cafe metadata files. Each CSV row: column 0 = dish id string, column 1 = **`total_calories`** (float). Header row `dish_id` is skipped. Invalid floats skipped.
 
-**Download (standard for this repo):** **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)** — `essentials` + `overhead` tiers (metadata, splits, all GCS overhead dishes). Optional `full` tier = entire 181 GB bucket including side-angle videos.
+**Download:** **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**. On limited storage, download **metadata + splits first**, then add overhead dishes incrementally (`download_more_overhead.py --target_total N` or `download_nutrition5k.py --only_missing`).
 
-```bash
-python scripts/download_nutrition5k.py \
-  --dataset_root ~/data/nutrition5k_dataset \
-  --tier essentials overhead
-```
+### Dataset scope (summary)
 
-Resume interrupted downloads: re-run the same command, or `--tier overhead --only_missing`.
-
-Legacy incremental cap (`--target_total 1000`): `scripts/download_more_overhead.py` — superseded for full-data workflows.
+We use **official Nutrition5k labels and splits** on a **local overhead subset** (`official IDs ∩ downloaded RGB`). That supports a **Stage-1 baseline** under laptop storage limits; a **VLM** will be compared on the **same test set** (see **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**). Report actual train/val/test counts from `train.py` or EDA CSV in slides—not paper full-data leaderboard numbers.
 
 ---
 
@@ -173,7 +174,7 @@ Legacy incremental cap (`--target_total 1000`): `scripts/download_more_overhead.
 ### 5.2 `build_split_samples`
 
 1. Load calories map; read train/test IDs from files (or fallback §5.3).
-2. **`has_local_rgb`:** train/val pool only includes IDs that have a resolvable RGB file under `imagery/realsense_overhead/<id>/` (`_find_rgb_depth_paths`). With the full overhead download, this matches essentially all split IDs that have GCS imagery.
+2. **`has_local_rgb`:** train/val pool only includes IDs that have a resolvable RGB file under `imagery/realsense_overhead/<id>/` (`_find_rgb_depth_paths`). On a partial download, official train IDs without local folders are **skipped** (subset training).
 3. Shuffle available train IDs with `random.Random(seed)`; validation size = `max(1, int(len(available_train_ids) * val_ratio))`; remainder = train. **Test** list is built from official test IDs independently.
 4. **`make_samples`:** skips IDs with no RGB file; depth optional; `_find_rgb_depth_paths` matches keywords (`rgb.png`, `rgb.jpg`, `color`, `depth_raw`, `raw_depth`, `depth`, …).
 
@@ -422,9 +423,13 @@ logs/
 
 ## 17. Benchmark alignment vs approximations
 
-**Aligned:** official dish calorie labels from cafe metadata CSVs; official train/test ID files; **full GCS overhead imagery** (all locally available `realsense_overhead` dishes in the chosen split).
+**Aligned:** official dish calorie labels; official train/test ID files; evaluation on official **test** IDs that exist locally; same preprocessing and metrics for all **baseline** runs in this repo.
 
-**Engineering / paper gap:** validation is a random hold-out from **official train** IDs (seeded, `--val_ratio`); RGB/depth filenames resolved by **keyword** heuristics; ResNet-18 + shallow head is a **compact baseline**, not the full Nutrition5k paper system; RGB-D fusion is **early concat**, not learned fusion stacks.
+**Documented limitation (storage):** training covers a **subset** of official train IDs—the intersection with downloaded overhead RGB. See **[docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)**.
+
+**Staged evaluation (baseline → VLM):** See **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**. Stage 1 = this repo; Stage 2 = VLM on the same `test_predictions.csv` contract (`--split_type`, `--seed` unchanged).
+
+**Engineering / paper gap:** validation is a random hold-out from official train IDs (seeded, `--val_ratio`); RGB/depth filenames resolved by keyword heuristics; ResNet-18 + shallow head is a compact baseline, not the full Nutrition5k paper system; RGB-D fusion is early concat; web demo RGB-D may use estimated depth (MiDaS), not necessarily the same as training depth maps.
 
 ---
 
@@ -437,7 +442,7 @@ logs/
 | Food-101 cls `ValueError` on evaluate | Train with `--enable_food101_cls` first. |
 | `gsutil` errors in downloader | GCS credentials / `gsutil` not installed; bucket path changed. |
 | MiDaS warning in web app | Torch hub download blocked; app falls back to heuristic depth. |
-| Empty train loader | Incomplete overhead download or wrong `--dataset_root`—run `download_nutrition5k.py --tier essentials overhead`. |
+| Empty train loader | No local overhead RGB for train IDs—download more dishes or fix `--dataset_root`. |
 | `OSError: read-only file system: '/path'` when generating slides | You used README **placeholder** paths; pass real `--dataset_root` and `--run_dir`. |
 
 ---
@@ -447,6 +452,16 @@ logs/
 - Nutrition5k: [google-research-datasets/Nutrition5k](https://github.com/google-research-datasets/Nutrition5k)
 - RGB-D nutrition example: [SightVanish/NutritionEstimation](https://github.com/SightVanish/NutritionEstimation)
 - Structured pipeline reference: [Lyce24/NutriFusionNet](https://github.com/Lyce24/NutriFusionNet)
+
+---
+
+## Documentation (`docs/`)
+
+| Doc | Contents |
+|-----|----------|
+| [docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md) | **End-to-end logic** — Stage 0 data → Stage 1 baseline → Stage 2 VLM |
+| [docs/DATA_SCOPE.md](docs/DATA_SCOPE.md) | Subset + baseline justification for reviewers |
+| [docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md) | GCS download commands |
 
 ---
 

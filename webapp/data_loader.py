@@ -178,8 +178,8 @@ def build_split_samples(
         rgb_path, _ = _find_rgb_depth_paths(overhead_root / dish_id)
         return rgb_path is not None
 
-    # Build train/val split only from dishes that actually exist locally.
-    # Only dishes with a local overhead RGB are used (skips missing downloads).
+    # Official train/test IDs, but only dishes with local overhead RGB (storage-limited subset).
+    # See docs/DATA_SCOPE.md — not a random sample; missing downloads are skipped.
     rng = random.Random(seed)
     available_train_ids = [x for x in train_ids if x in calorie_map and has_local_rgb(x)]
     rng.shuffle(available_train_ids)

@@ -1,30 +1,29 @@
-# Nutrition5k 全量下载指南
+# Downloading Nutrition5k
 
-本仓库的训练与评估默认使用 **官方 GCS 上的完整 overhead 数据**（`imagery/realsense_overhead/`，约 **3490** 道菜），配合 `metadata/` 与 `dish_ids/splits/`。不需要 181 GB 侧拍视频，除非复现 side-angle 实验。
+Training uses the **official split** plus a **local overhead subset** that fits your disk. Why that is methodologically sound: **[DATA_SCOPE.md](DATA_SCOPE.md)**. Full pipeline context: **[RESEARCH_PIPELINE.md](RESEARCH_PIPELINE.md)**.
 
-## 数据规模（官方）
+- GCS overhead: ~**3,490** dish folders  
+- Full `.tar.gz`: ~**181 GB** (includes side-angle video; **not required** for this repo)
 
-| 内容 | 说明 |
-|------|------|
-| 论文/metadata | ~5006 道菜 |
-| GCS overhead（本仓库使用） | **约 3490** 个 `dish_*` 文件夹 |
-| 完整 tar.gz | `nutrition5k_dataset.tar.gz`，约 **181 GB** |
-| 推荐本地路径 | `~/data/nutrition5k_dataset`（与 README / `train.py` 示例一致） |
+Bucket: `gs://nutrition5k_dataset/nutrition5k_dataset/`
 
-官方 bucket：`gs://nutrition5k_dataset/nutrition5k_dataset/`
+---
 
-## 0. 前置：安装 gsutil
+## Prerequisites
 
 ```bash
-brew install --cask google-cloud-sdk   # macOS
-gcloud auth login                      # 可选，公开 bucket 通常可直接读
+# macOS example
+brew install --cask google-cloud-sdk
+gcloud auth login   # optional; public bucket is usually readable
 gsutil ls gs://nutrition5k_dataset/nutrition5k_dataset/
 ```
 
-## 1. 标准下载（metadata + 全部 overhead）
+---
+
+## Recommended: essentials + overhead
 
 ```bash
-export N5K_ROOT="$HOME/data/nutrition5k_dataset"
+export N5K_ROOT="$HOME/data/nutrition5k_mini"   # or nutrition5k_dataset
 mkdir -p "$N5K_ROOT"
 
 cd "/path/to/food calorie"
@@ -33,31 +32,44 @@ python scripts/download_nutrition5k.py \
   --tier essentials overhead
 ```
 
-- **essentials**：`metadata/` + `dish_ids/splits/`
-- **overhead**：全部 `imagery/realsense_overhead/`
+| Tier | Contents |
+|------|----------|
+| `essentials` | `metadata/`, `dish_ids/splits/` (small) |
+| `overhead` | `imagery/realsense_overhead/` (large) |
 
-中断后 **重新执行同一条命令** 即可续传（`gsutil` 跳过已有文件）。
+Re-run the same command to resume; `gsutil` skips existing files.
 
-## 2. 补全缺失（resume）
+---
 
-若已有部分数据，只下本地没有的 dish：
+## Laptop with limited storage
 
-```bash
-python scripts/download_nutrition5k.py \
-  --dataset_root "$N5K_ROOT" \
-  --tier overhead \
-  --only_missing
-```
-
-补全云端全部 overhead（不限 split 列表）：
+Download metadata and splits first, then grow imagery incrementally:
 
 ```bash
+# Cap download size (legacy helper)
+python scripts/download_more_overhead.py \
+  --dataset_root "$N5K_ROOT" \
+  --target_total 3000
+
+# Or resume only missing dishes
 python scripts/download_nutrition5k.py \
   --dataset_root "$N5K_ROOT" \
-  --tier overhead --only_missing --all_remote
+  --tier overhead --only_missing
 ```
 
-## 3. 完整 181 GB（含侧拍视频）
+All missing IDs in split files:
+
+```bash
+python scripts/download_more_overhead.py \
+  --dataset_root "$N5K_ROOT" \
+  --target_total 0
+```
+
+---
+
+## Full 181 GB bundle (optional)
+
+Includes side-angle video. Not used by `train.py` in this project.
 
 ```bash
 python scripts/download_nutrition5k.py \
@@ -65,7 +77,9 @@ python scripts/download_nutrition5k.py \
   --tier full
 ```
 
-## 4. 下载后检查与训练
+---
+
+## After download
 
 ```bash
 python scripts/check_overhead_integrity.py --dataset_root "$N5K_ROOT"
@@ -73,18 +87,18 @@ python scripts/check_overhead_integrity.py --dataset_root "$N5K_ROOT"
 python train.py \
   --dataset_root "$N5K_ROOT" \
   --mode rgbd --split_type depth \
-  --output_dir outputs_rgbd_full \
+  --output_dir outputs_rgbd \
   --loss_type smooth_l1 --scheduler plateau \
   --use_log_target --pretrained
 ```
 
-## 5. 代码是否需要修改？
+No changes to `data_loader.py` or `train.py` are required—the loaders always use official splits and only dishes with local RGB.
 
-**不需要改 `data_loader.py` / `train.py`。** 它们会：
+---
 
-- 使用官方 `dish_ids/splits/`
-- 只训练本地已有 RGB 的样本（全量 overhead 下载后与 split 基本对齐）
+## Scripts
 
-## 6. 旧脚本
-
-`scripts/download_more_overhead.py` 曾用于 `--target_total 1000` 的增量下载；全量请用 `download_nutrition5k.py`。若仍用旧目录，可 `--target_total 0` 补全 split 内缺失项。
+| Script | Use |
+|--------|-----|
+| `download_nutrition5k.py` | **Preferred** — essentials / overhead / full |
+| `download_more_overhead.py` | Legacy incremental download (`--target_total N`, or `0` for all missing in splits) |
