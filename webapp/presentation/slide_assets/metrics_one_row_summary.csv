@@ -1,0 +1,2 @@
+best_epoch,best_val_mae_kcal,epochs_configured,food101_cls,loss_type,run_mode,split_type,test_mae_kcal,test_rmse_kcal,use_log_target
+12,70.80698852539062,40,True,smooth_l1,rgbd,depth,79.09821319580078,125.89125061035156,True

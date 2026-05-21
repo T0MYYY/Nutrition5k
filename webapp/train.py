@@ -299,6 +299,12 @@ def main():
             log_row["food101_train_acc"] = food101_train_acc
             log_row["food101_val_loss"] = food101_val_loss
             log_row["food101_val_acc"] = food101_val_acc
+        elif cfg.enable_food101_cls and model.has_classifier:
+            # Keep CSV columns stable when Food-101 steps are skipped (interval scheduling).
+            log_row["food101_train_loss"] = None
+            log_row["food101_train_acc"] = None
+            log_row["food101_val_loss"] = None
+            log_row["food101_val_acc"] = None
         log_epoch(cfg.output_dir, log_row)
 
         state = {

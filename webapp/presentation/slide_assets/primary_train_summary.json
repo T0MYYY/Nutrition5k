@@ -1,0 +1,9 @@
+{
+  "best_val_mae": 70.80698852539062,
+  "best_epoch": 12,
+  "mode": "rgbd",
+  "split_type": "depth",
+  "loss_type": "smooth_l1",
+  "use_log_target": true,
+  "has_classifier": true
+}
