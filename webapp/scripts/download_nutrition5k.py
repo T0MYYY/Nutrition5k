@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import shutil
 import subprocess
@@ -38,6 +39,9 @@ from typing import Iterable, List, Set
 GCS_ROOT = "gs://nutrition5k_dataset/nutrition5k_dataset"
 # Remote overhead has ~3490 dish folders (not all 5006 paper IDs have overhead scans).
 EXPECTED_REMOTE_OVERHEAD = 3490
+
+# gsutil forbids parallel_process_count > 1 on Windows; threads still parallelize.
+PARALLEL_PROCESS_COUNT = 1 if os.name == "nt" else 4
 
 
 def _require_gsutil() -> str:
@@ -67,7 +71,7 @@ def _gcs_cp_r(gsutil: str, src: str, dst: Path, *, dry_run: bool, parallel: bool
         "-o",
         "GSUtil:parallel_thread_count=8",
         "-o",
-        "GSUtil:parallel_process_count=4",
+        f"GSUtil:parallel_process_count={PARALLEL_PROCESS_COUNT}",
         "cp",
         "-r",
         src,
@@ -127,10 +131,12 @@ def _read_ids_file(path: Path) -> List[str]:
 
 def download_essentials(gsutil: str, root: Path, *, dry_run: bool) -> None:
     print("\n== Tier: essentials (metadata + dish_ids) ==")
+    root.mkdir(parents=True, exist_ok=True)
     for sub in ("metadata", "dish_ids"):
         src = f"{GCS_ROOT}/{sub}"
-        dst = root / sub
-        code = _gcs_cp_r(gsutil, src, dst, dry_run=dry_run)
+        # Copy the folder into the existing root dir -> gsutil creates root/<sub>.
+        # (Passing a non-existent root/<sub> as dst fails on Windows gsutil.)
+        code = _gcs_cp_r(gsutil, src, root, dry_run=dry_run)
         if code != 0:
             raise SystemExit(f"Failed copying {sub} (exit {code})")
 
@@ -183,7 +189,7 @@ def download_overhead_missing(
             gsutil,
             "-m",
             "-o",
-            "GSUtil:parallel_process_count=2",
+            f"GSUtil:parallel_process_count={PARALLEL_PROCESS_COUNT}",
             "cp",
             "-r",
             src,

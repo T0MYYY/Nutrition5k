@@ -1,6 +1,6 @@
 {
-  "best_val_mae": 65.97866617838541,
-  "best_epoch": 23,
+  "best_val_mae": 62.45265305952592,
+  "best_epoch": 27,
   "mode": "rgb",
   "split_type": "rgb",
   "loss_type": "smooth_l1",

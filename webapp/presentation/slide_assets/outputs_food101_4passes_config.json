@@ -1,5 +1,5 @@
 {
-  "dataset_root": "/Users/yiouwang/data/nutrition5k_mini",
+  "dataset_root": "C:\\Users\\98572\\data\\nutrition5k_dataset",
   "output_dir": "outputs_food101_4passes",
   "image_size": 224,
   "batch_size": 32,
@@ -23,7 +23,7 @@
   "backbone_lr": null,
   "head_lr": null,
   "enable_food101_cls": true,
-  "food101_root": "/Users/yiouwang/data",
+  "food101_root": "C:\\Users\\98572\\data",
   "food101_download": false,
   "cls_loss_weight": 1.0,
   "cls_batch_size": 32,
@@ -37,5 +37,5 @@
   "checkpoint_path": "",
   "save_predictions_csv": "",
   "device": "",
-  "timestamp": "2026-04-22T00:06:40.186647Z"
+  "timestamp": "2026-05-22T06:33:12.630364Z"
 }

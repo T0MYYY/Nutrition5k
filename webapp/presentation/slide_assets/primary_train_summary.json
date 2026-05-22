@@ -1,9 +1,9 @@
 {
-  "best_val_mae": 70.80698852539062,
-  "best_epoch": 12,
-  "mode": "rgbd",
-  "split_type": "depth",
+  "best_val_mae": 48.27996748490767,
+  "best_epoch": 40,
+  "mode": "rgb",
+  "split_type": "rgb",
   "loss_type": "smooth_l1",
   "use_log_target": true,
-  "has_classifier": true
+  "has_classifier": false
 }

@@ -1,5 +1,5 @@
 {
-  "assets_dir": "/Users/yiouwang/Desktop/ML2/food calorie/presentation/slide_assets",
+  "assets_dir": "C:\\Users\\98572\\OneDrive\\Desktop\\ML2_Project\\ai-food-calorie-calculator\\presentation\\slide_assets",
   "written": [
     "MODEL_PIPELINE.md",
     "README.md",
@@ -51,12 +51,12 @@
     "training_food101_accuracy.png",
     "training_lr.png"
   ],
-  "dataset_root": "/Users/yiouwang/data/nutrition5k_mini",
-  "primary_run": "/Users/yiouwang/Desktop/ML2/food calorie/outputs_train_rgbd_food101",
+  "dataset_root": "C:\\Users\\98572\\data\\nutrition5k_dataset",
+  "primary_run": "C:\\Users\\98572\\OneDrive\\Desktop\\ML2_Project\\ai-food-calorie-calculator\\outputs_rgb",
   "extra_runs": [
-    "/Users/yiouwang/Desktop/ML2/food calorie/outputs_food101_4passes"
+    "C:\\Users\\98572\\OneDrive\\Desktop\\ML2_Project\\ai-food-calorie-calculator\\outputs_food101_4passes"
   ],
-  "split_type": "depth",
+  "split_type": "rgb",
   "val_ratio": 0.1,
   "seed": 42
 }

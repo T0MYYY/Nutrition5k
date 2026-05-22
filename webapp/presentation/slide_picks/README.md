@@ -2,7 +2,7 @@
 
 Copied from `slide_assets/` for PowerPoint. Numbered in recommended presentation order.
 Regenerate with `scripts/generate_presentation_assets.py`.
-Pipeline context: [docs/RESEARCH_PIPELINE.md](../../docs/RESEARCH_PIPELINE.md).
+Pipeline context: [docs/RESEARCH_PIPELINE.md](../docs/RESEARCH_PIPELINE.md).
 
 | File | Description |
 |------|-------------|
@@ -21,8 +21,8 @@ Pipeline context: [docs/RESEARCH_PIPELINE.md](../../docs/RESEARCH_PIPELINE.md).
 | `12_train_food101_aux_accuracy.png` | Food-101 auxiliary accuracy |
 | `20_test_scatter_RGBD.png` | RGB-D test: pred vs truth + residuals |
 | `21_test_scatter_RGB.png` | RGB test: pred vs truth + residuals |
-| `22_test_error_by_calorie_bin_RGBD.png` | RGB-D: mean \|error\| by calorie bin |
-| `23_test_error_by_calorie_bin_RGB.png` | RGB: mean \|error\| by calorie bin |
+| `22_test_error_by_calorie_bin_RGBD.png` | RGB-D: mean |error| by calorie bin |
+| `23_test_error_by_calorie_bin_RGB.png` | RGB: mean |error| by calorie bin |
 | `24_test_error_cdf_RGBD.png` | RGB-D: CDF of absolute error |
 | `25_test_worst_errors_RGBD.png` | RGB-D: largest test errors |
 
