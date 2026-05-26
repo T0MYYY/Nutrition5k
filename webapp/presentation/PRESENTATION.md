@@ -160,19 +160,6 @@ The RGB-D model extends the RGB model by adding depth as a fourth input channel.
 
 ---
 
-## Food-101 Category Detection
-
-While training the Nutrition5k calorie model, we also train a small Food-101 category head on the same shared backbone. This means the model can estimate calories and also recognize the food category.
-
-| Output | What It Means |
-|--------|---------------|
-| Calorie regression | predicts total dish calories in kcal |
-| Food category detection | predicts the likely food type, such as pizza, salad, or steak |
-
-On the Food-101 official test set, the RGB checkpoint reaches **48.7% top-1 accuracy** and **75.9% top-5 accuracy**. In simple terms, the correct food category is often included in the model's top few guesses.
-
----
-
 ## Training Setup
 
 | Setting | RGB-D Primary | RGB Comparison |
@@ -183,7 +170,6 @@ On the Food-101 official test set, the RGB checkpoint reaches **48.7% top-1 accu
 | Loss | SmoothL1 on log calories | SmoothL1 on log calories |
 | Scheduler | ReduceLROnPlateau | ReduceLROnPlateau |
 | Early stopping patience | 10 | 10 |
-| Food-101 classification branch | enabled | enabled |
 
 Both models use the same overall recipe, so the main comparison is the input type: RGB-D vs RGB.
 
@@ -324,7 +310,7 @@ uploaded food image -> preprocessing -> trained checkpoint -> predicted kcal
 | RGB | food image | not used |
 | RGB-D | food image + depth cue | MiDaS, heuristic, or uploaded depth map |
 
-The demo loads saved checkpoints and returns a calorie estimate. When the classifier head is available, it can also show candidate food categories.
+The demo loads saved checkpoints and returns a calorie estimate.
 
 ---
 
@@ -358,7 +344,7 @@ This means we do **not** claim full Nutrition5k leaderboard reproduction. Instea
 3. RGB-only is close, so depth helps slightly but is not enough by itself.
 4. Because of laptop storage and hardware limits, this is a controlled local-subset baseline rather than a full-dataset reproduction.
 5. The biggest errors happen on high-calorie or visually ambiguous dishes.
-6. The next best improvements are stronger backbones, better RGB-D fusion, and ingredient/category reasoning.
+6. The next best improvements are stronger backbones, better RGB-D fusion, and ingredient or portion-size reasoning.
 
 ---
 
