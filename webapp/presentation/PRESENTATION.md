@@ -160,20 +160,16 @@ The RGB-D model extends the RGB model by adding depth as a fourth input channel.
 
 ---
 
-## Food-101 Classification Branch
+## Food-101 Category Detection
 
-Besides calorie regression, the model can include a small classification head trained with Food-101 images. This branch predicts a food category, while the main branch still predicts calories.
+While training the Nutrition5k calorie model, we also train a small Food-101 category head on the same shared backbone. This means the model can estimate calories and also recognize the food category.
 
-| Component | Purpose |
-|-----------|---------|
-| Food-101 classifier | learns food-category features from labeled food images |
-| Shared backbone | lets category learning improve visual representation |
-| Calorie regression head | remains the final output used for MAE/RMSE |
-| Demo output | can show candidate food categories with confidence scores |
+| Output | What It Means |
+|--------|---------------|
+| Calorie regression | predicts total dish calories in kcal |
+| Food category detection | predicts the likely food type, such as pizza, salad, or steak |
 
-On the Food-101 official test set, the RGB checkpoint reaches **48.7% top-1 accuracy** and **75.9% top-5 accuracy**. This means the classifier is not perfect, but it often places the correct food type within its top candidates.
-
-This branch is helpful because knowing the type of food gives the calorie model a better starting point for estimating total calories. For example, two dishes may look similar in size, but their food category can suggest very different calorie density.
+On the Food-101 official test set, the RGB checkpoint reaches **48.7% top-1 accuracy** and **75.9% top-5 accuracy**. In simple terms, the correct food category is often included in the model's top few guesses.
 
 ---
 
