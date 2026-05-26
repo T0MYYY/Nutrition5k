@@ -1,8 +1,7 @@
 {
   "assets_dir": "/Users/yiouwang/Desktop/ML2/food calorie/presentation/slide_assets",
   "written": [
-    "MODEL_PIPELINE.md",
-    "README.md",
+    "data_example_rgb_depth_triplet.png",
     "eda_calorie_bins.png",
     "eda_calories_and_counts.png",
     "eda_calories_boxplot.png",

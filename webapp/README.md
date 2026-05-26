@@ -14,7 +14,7 @@ End-to-end documentation for this codebase: **data layout**, **configuration**, 
 
 **One-line pipeline:** `overhead image → ResNet-18 → MLP head → calories (kcal)` (+ optional Food-101 `classify` head).
 
-**Research pipeline:** **Stage 0** — download official metadata/splits + a **storage-limited overhead subset** → **Stage 1** — ResNet-18 **baseline** (this repo) with fixed official **test** MAE/RMSE → **Stage 2** — **VLM** (planned) on the **same test set**. Full diagram: **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**. Justification: **[docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)**. Download: **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**.
+**Research pipeline:** **Stage 0** — download official metadata/splits + a **storage-limited overhead subset** → **Stage 1** — ResNet-18 **baseline** (this repo) with fixed official **test** MAE/RMSE → **Stage 2** — future stronger models on the **same test set**. The README is the main manual; the consolidated data-scope, download, and research-pipeline notes live in [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md).
 
 **Live Space:** [https://austinwang10-food-calorie-app.hf.space/](https://austinwang10-food-calorie-app.hf.space/)
 
@@ -39,16 +39,16 @@ End-to-end documentation for this codebase: **data layout**, **configuration**, 
 14. [Hugging Face entry (`app.py`)](#14-hugging-face-entry-apppy)
 15. [Run artifacts: directories and files](#15-run-artifacts-directories-and-files)
 16. [Presentation bundle (`presentation/`)](#16-presentation-bundle-presentation)
-17. [Benchmark alignment vs approximations](#17-benchmark-alignment-vs-approximations)
-18. [Troubleshooting](#18-troubleshooting)
-19. [Further reading](#19-further-reading)
-20. [Documentation (`docs/`)](#documentation-docs)
+17. [Consolidated project guide (`docs/PROJECT_GUIDE.md`)](#17-consolidated-project-guide-docsproject_guidemd)
+18. [Benchmark alignment vs approximations](#18-benchmark-alignment-vs-approximations)
+19. [Troubleshooting](#19-troubleshooting)
+20. [Further reading](#20-further-reading)
 
 ---
 
 ## 1. Quick start
 
-**Prerequisites:** Install [Google Cloud SDK](https://cloud.google.com/storage/docs/gsutil_install) (`gsutil`) and download **as much overhead data as your disk allows** (metadata + splits are small; imagery is large—see [docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)):
+**Prerequisites:** Install [Google Cloud SDK](https://cloud.google.com/storage/docs/gsutil_install) (`gsutil`) and download **as much overhead data as your disk allows**. Metadata and split files are small; overhead imagery is the storage-heavy part.
 
 ```bash
 # Example: partial download (legacy cap) or use download_nutrition5k.py --only_missing
@@ -87,7 +87,7 @@ python scripts/generate_presentation_assets.py \
   --split_type rgb --val_ratio 0.1 --seed 42
 ```
 
-Slide figures land in **`presentation/slide_picks/`** (curated) and **`presentation/slide_assets/`** (full set).
+Slide figures land in **`presentation/slide_assets/`** (full set) and **`presentation/slide_picks/`** (curated). The current browser-ready presentation is **`presentation/PRESENTATION.html`**.
 
 ---
 
@@ -108,11 +108,10 @@ Slide figures land in **`presentation/slide_picks/`** (curated) and **`presentat
 | `scripts/download_more_overhead.py` | Legacy incremental overhead download (e.g. `--target_total 1000`). |
 | `scripts/check_overhead_integrity.py` | Counts complete/partial overhead folders by fixed filenames. |
 | `scripts/generate_presentation_assets.py` | Figures + tables → `presentation/slide_assets/` and `slide_picks/`. |
-| `presentation/MODEL_PIPELINE.md` | Mermaid pipeline doc. |
-| `presentation/README.md` | Presentation / slide export usage. |
-| `docs/RESEARCH_PIPELINE.md` | **End-to-end logical flow** (data → baseline → VLM, evaluation protocol). |
-| `docs/DATA_SCOPE.md` | Subset + baseline + VLM justification for reviewers. |
-| `docs/DOWNLOAD_NUTRITION5K.md` | GCS download (full or incremental). |
+| `docs/PROJECT_GUIDE.md` | Consolidated data-scope, download, and research-pipeline notes preserved from the old docs. |
+| `presentation/PRESENTATION.md` | Editable source presentation. |
+| `presentation/PRESENTATION.html` | Browser-ready presentation with embedded plots. |
+| `presentation/deck_style.css` | CSS for the browser-ready deck. |
 
 There is **no** `scripts/run_full_pipeline.sh` in the repo; use **`download_nutrition5k.py`** (§12.1) then `train.py` / `evaluate.py`.
 
@@ -154,11 +153,13 @@ dish_ids/splits/             # required for official benchmark splits
 
 **Labels:** `_read_calories_map` scans both cafe metadata files. Each CSV row: column 0 = dish id string, column 1 = **`total_calories`** (float). Header row `dish_id` is skipped. Invalid floats skipped.
 
-**Download:** **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**. On limited storage, download **metadata + splits first**, then add overhead dishes incrementally (`download_more_overhead.py --target_total N` or `download_nutrition5k.py --only_missing`).
+**Download:** on limited storage, download **metadata + splits first**, then add overhead dishes incrementally (`download_more_overhead.py --target_total N` or `download_nutrition5k.py --only_missing`).
 
 ### Dataset scope (summary)
 
-We use **official Nutrition5k labels and splits** on a **local overhead subset** (`official IDs ∩ downloaded RGB`). That supports a **Stage-1 baseline** under laptop storage limits; a **VLM** will be compared on the **same test set** (see **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**). Report actual train/val/test counts from `train.py` or EDA CSV in slides—not paper full-data leaderboard numbers.
+We use **official Nutrition5k labels and splits** on a **local overhead subset** (`official IDs ∩ downloaded RGB`). This supports a controlled baseline under laptop storage limits. All compared models should use the **same fixed local test set**, same seed/split configuration, and same MAE/RMSE metrics. Report actual train/val/test counts from `train.py` or EDA CSV in slides, not paper full-data leaderboard numbers.
+
+For the full reviewer-facing justification, download commands, and staged research logic, see **[`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md)**.
 
 ---
 
@@ -336,7 +337,7 @@ python scripts/download_nutrition5k.py --dataset_root ~/data/nutrition5k_dataset
 python scripts/download_nutrition5k.py --dataset_root ~/data/nutrition5k_dataset --tier overhead --only_missing
 ```
 
-Requires **`gsutil`**. See **[docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md)**.
+Requires **`gsutil`**.
 
 ### 12.2 `scripts/download_more_overhead.py` (legacy)
 
@@ -414,26 +415,56 @@ logs/
 
 | Path | Role |
 |------|------|
-| `slide_picks/` | **Curated** numbered PNGs for PowerPoint (EDA, metrics, curves, tests). |
-| `slide_assets/` | Full generator output (all runs, CSV/JSON snapshots). |
-| `MODEL_PIPELINE.md` | Pipeline narrative + Mermaid (export via [mermaid.live](https://mermaid.live)). |
-| `README.md` | Regenerate figures after training on the full dataset. |
+| `PRESENTATION.html` | **Current presentation deck** — browser-ready, self-contained HTML with embedded plots. |
+| `PRESENTATION.md` | Editable source deck with audience-facing explanations, EDA, pipeline, model, metrics, demo link, and data-scope limitation. |
+| `deck_style.css` | CSS used when exporting the HTML deck; keeps plots large in browser view. |
+| `slide_assets/` | Figure library used by the deck (EDA, pipeline, model diagrams, metrics, errors, and one RGB/depth example). |
+| `slide_picks/` | Curated numbered PNGs for optional PowerPoint export. |
+
+Open the current deck directly:
+
+```bash
+open presentation/PRESENTATION.html
+```
+
+After editing `presentation/PRESENTATION.md`, rebuild the browser-ready deck:
+
+```bash
+cd presentation
+pandoc PRESENTATION.md -f gfm -t html5 --standalone --embed-resources \
+  --css deck_style.css \
+  --metadata pagetitle="Nutrition5k Calorie Prediction" \
+  -o PRESENTATION.html
+```
 
 ---
 
-## 17. Benchmark alignment vs approximations
+## 17. Consolidated project guide (`docs/PROJECT_GUIDE.md`)
+
+The old standalone notes for data scope, download instructions, and research-pipeline planning have been merged into **[`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md)**. This keeps the markdown structure small while preserving the important reviewer-facing material:
+
+| Topic | Where it is now |
+|-------|-----------------|
+| Why a local Nutrition5k subset is valid | `docs/PROJECT_GUIDE.md`, section 2 |
+| How to download essentials and overhead imagery | `docs/PROJECT_GUIDE.md`, section 4 |
+| Stage 1 baseline vs future model comparison | `docs/PROJECT_GUIDE.md`, sections 1, 3, and 5 |
+| Fair test-set rules | `docs/PROJECT_GUIDE.md`, section 5 |
+
+---
+
+## 18. Benchmark alignment vs approximations
 
 **Aligned:** official dish calorie labels; official train/test ID files; evaluation on official **test** IDs that exist locally; same preprocessing and metrics for all **baseline** runs in this repo.
 
-**Documented limitation (storage):** training covers a **subset** of official train IDs—the intersection with downloaded overhead RGB. See **[docs/DATA_SCOPE.md](docs/DATA_SCOPE.md)**.
+**Documented limitation (storage):** training covers a **subset** of official train IDs: the intersection with downloaded overhead RGB. The full Nutrition5k release is too large for the group laptops to store and train on comfortably, so results are presented as a controlled local-subset baseline rather than a full-data reproduction.
 
-**Staged evaluation (baseline → VLM):** See **[docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md)**. Stage 1 = this repo; Stage 2 = VLM on the same `test_predictions.csv` contract (`--split_type`, `--seed` unchanged).
+**Staged evaluation:** Stage 1 = this repo's ResNet-18 baseline; later models should use the same `test_predictions.csv` contract where possible (`--split_type`, `--seed`, and test dish IDs unchanged).
 
 **Engineering / paper gap:** validation is a random hold-out from official train IDs (seeded, `--val_ratio`); RGB/depth filenames resolved by keyword heuristics; ResNet-18 + shallow head is a compact baseline, not the full Nutrition5k paper system; RGB-D fusion is early concat; web demo RGB-D may use estimated depth (MiDaS), not necessarily the same as training depth maps.
 
 ---
 
-## 18. Troubleshooting
+## 19. Troubleshooting
 
 | Symptom | Likely cause |
 |---------|----------------|
@@ -447,21 +478,11 @@ logs/
 
 ---
 
-## 19. Further reading
+## 20. Further reading
 
 - Nutrition5k: [google-research-datasets/Nutrition5k](https://github.com/google-research-datasets/Nutrition5k)
 - RGB-D nutrition example: [SightVanish/NutritionEstimation](https://github.com/SightVanish/NutritionEstimation)
 - Structured pipeline reference: [Lyce24/NutriFusionNet](https://github.com/Lyce24/NutriFusionNet)
-
----
-
-## Documentation (`docs/`)
-
-| Doc | Contents |
-|-----|----------|
-| [docs/RESEARCH_PIPELINE.md](docs/RESEARCH_PIPELINE.md) | **End-to-end logic** — Stage 0 data → Stage 1 baseline → Stage 2 VLM |
-| [docs/DATA_SCOPE.md](docs/DATA_SCOPE.md) | Subset + baseline justification for reviewers |
-| [docs/DOWNLOAD_NUTRITION5K.md](docs/DOWNLOAD_NUTRITION5K.md) | GCS download commands |
 
 ---
 
