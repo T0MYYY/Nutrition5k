@@ -1,0 +1,34 @@
+data:
+  cafe1_csv: /content/drive/MyDrive/nutrition5k/data/metadata/dish_metadata_cafe1.csv
+  cafe2_csv: /content/drive/MyDrive/nutrition5k/data/metadata/dish_metadata_cafe2.csv
+  overhead_root: /dev/shm/realsense_overhead
+  pre_resized: false
+  preload_ram: true
+  test_ids_txt: /content/drive/MyDrive/nutrition5k/data/splits/depth_test_ids.txt
+  train_ids_txt: /content/drive/MyDrive/nutrition5k/data/splits/depth_train_ids.txt
+  use_depth: false
+  val_ratio: 0.1
+  volume_csv: /content/drive/MyDrive/nutrition5k/data/metadata/volume_estimates.csv
+model:
+  mode: direct
+  tasks:
+  - mass
+  type: mass_regressor
+  use_volume: true
+training:
+  alpha: 0.9
+  batch_size: 256
+  checkpoint_dir: /content/drive/MyDrive/nutrition5k/checkpoints/exp4
+  early_stopping_patience: 15
+  eps: 1.0
+  freeze_backbone_epochs: 10
+  head_lr: 0.001
+  lr: 0.0003
+  lr_factor: 0.5
+  lr_min: 1.0e-06
+  lr_patience: 5
+  max_epochs: 10000
+  momentum: 0.9
+  num_workers: 10
+  optimizer: adam
+  weight_decay: 0.0001
