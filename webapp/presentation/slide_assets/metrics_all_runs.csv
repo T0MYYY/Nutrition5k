@@ -1,0 +1,3 @@
+run,mode,split_type,loss,log1p,epochs,best_val_mae,best_epoch,test_mae,test_rmse
+primary,rgbd,depth,smooth_l1,True,40,70.80698852539062,12,79.09821319580078,125.89125061035156
+outputs_food101_4passes,rgb,rgb,smooth_l1,True,40,65.97866617838541,23,80.30695343017578,127.35200500488281

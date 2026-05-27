@@ -1,0 +1,10 @@
+torch
+torchvision
+tqdm
+Pillow
+numpy
+pandas
+matplotlib
+gradio
+timm
+opencv-python-headless
