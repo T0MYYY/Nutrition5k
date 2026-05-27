@@ -11,5 +11,6 @@ setup(
         "PyYAML",
         "Pillow",
         "numpy",
+        "tqdm",
     ],
 )

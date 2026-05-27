@@ -30,13 +30,21 @@ def evaluate(model, config_path: str, output_dir: str):
     all_targets = {t: [] for t in tasks}
 
     with torch.no_grad():
-        for imgs, labels in loader:
-            imgs = imgs.to(device, non_blocking=True)
+        for batch in loader:
+            if cfg['model']['type'] == 'dpf_nutrition':
+                rgb, depth, labels = batch
+                rgb = rgb.to(device, non_blocking=True)
+                depth = depth.to(device, non_blocking=True)
+            else:
+                imgs, labels = batch
+                imgs = imgs.to(device, non_blocking=True)
             if cfg['model']['type'] == 'mass_regressor':
                 vol = labels.pop('volume', None)
                 if vol is not None:
                     vol = vol.to(device)
                 preds = {'mass': model(imgs, vol)}
+            elif cfg['model']['type'] == 'dpf_nutrition':
+                preds = model(rgb, depth)
             else:
                 preds = model(imgs)
 

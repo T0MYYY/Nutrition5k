@@ -24,6 +24,7 @@ class DepthDataset(Dataset):
         self.rgb_transform = rgb_transform
         self.depth_transform = depth_transform
         self.volume_map = volume_map or {}
+        self.include_volume = volume_map is not None
         self.samples: List = []
 
         for dish_id in dish_ids:
@@ -36,7 +37,7 @@ class DepthDataset(Dataset):
             if depth_transform is not None and not depth_ok:
                 continue  # depth required but missing or empty
             volume = self.volume_map.get(dish_id)
-            if self.volume_map and volume is None:
+            if self.include_volume and volume is None:
                 continue  # volume_map provided but dish missing — skip for consistency
             labels = self._build_labels(metadata[dish_id], mode)
             self.samples.append((
@@ -95,5 +96,6 @@ class DepthDataset(Dataset):
             img = rgb_t  # (3, H, W)
 
         label_tensor = {k: torch.tensor(v, dtype=torch.float32) for k, v in labels.items()}
-        label_tensor['volume'] = torch.tensor(volume if volume is not None else float('nan'), dtype=torch.float32)
+        if self.include_volume:
+            label_tensor['volume'] = torch.tensor(volume, dtype=torch.float32)
         return img, label_tensor

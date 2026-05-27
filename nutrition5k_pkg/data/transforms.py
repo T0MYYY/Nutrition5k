@@ -35,6 +35,14 @@ def get_val_transform(pre_resized: bool = False):
     return T.Compose(steps)
 
 
+def get_dpf_rgb_transform(train: bool = False):
+    steps = [T.Resize((336, 448))]
+    if train:
+        steps.append(T.RandomHorizontalFlip())
+    steps += [T.ToTensor(), T.Normalize(_MEAN, _STD)]
+    return T.Compose(steps)
+
+
 class DepthToTensor:
     """Picklable transform: 16-bit depth PIL image → (1, H, W) float tensor.
 
@@ -58,3 +66,25 @@ class DepthToTensor:
 def depth_to_tensor(target_size: int = 256) -> DepthToTensor:
     """Return a picklable depth transform (DepthToTensor instance)."""
     return DepthToTensor(target_size)
+
+
+class PredDepthToTensor:
+    def __init__(self, size=(336, 448)):
+        self.size = size
+        self._resample = getattr(Image, 'Resampling', Image).BILINEAR
+
+    def __call__(self, depth_pil):
+        arr = np.array(depth_pil, dtype=np.float32)
+        if arr.ndim == 3:
+            arr = arr[..., 0]
+        max_value = float(arr.max()) if arr.size else 0.0
+        if max_value > 1.0:
+            arr = arr / 65535.0 if max_value > 255.0 else arr / 255.0
+        arr = np.clip(arr, 0.0, 1.0)
+        pil = Image.fromarray(arr.astype(np.float32), mode='F')
+        pil = pil.resize((self.size[1], self.size[0]), self._resample)
+        return torch.from_numpy(np.array(pil, dtype=np.float32)).unsqueeze(0)
+
+
+def get_dpf_depth_transform():
+    return PredDepthToTensor((336, 448))

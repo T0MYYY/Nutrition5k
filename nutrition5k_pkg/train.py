@@ -5,12 +5,20 @@ import torch
 from torch.utils.data import DataLoader
 
 from .data.metadata import load_dish_metadata, get_train_val_test_split, load_official_split
-from .data.transforms import get_train_transform, get_val_transform, depth_to_tensor
+from .data.transforms import (
+    get_dpf_depth_transform,
+    get_dpf_rgb_transform,
+    get_train_transform,
+    get_val_transform,
+    depth_to_tensor,
+)
 from .data.dataset import Nutrition5kDataset
 from .data.depth_dataset import DepthDataset
-from .losses import multitask_mae_loss
+from .data.dpf_dataset import DPFNutritionDataset
+from .losses import geometric_l1_loss, multitask_mae_loss
 from .models.multitask_head import MultitaskNutritionNet
 from .models.mass_regressor import MassRegressor
+from .models.dpf_nutrition import DPFNutritionNet
 
 
 def load_config(path: str) -> Dict[str, Any]:
@@ -56,13 +64,23 @@ def _build_dataset(cfg: Dict, split: str):
 
     preload = cfg['data'].get('preload_ram', False) and is_train
 
+    if exp_type == 'dpf_nutrition':
+        return DPFNutritionDataset(
+            overhead_root=cfg['data']['overhead_root'],
+            pred_depth_root=cfg['data']['pred_depth_root'],
+            metadata=meta,
+            dish_ids=ids,
+            rgb_transform=get_dpf_rgb_transform(train=is_train),
+            depth_transform=get_dpf_depth_transform(),
+        )
     if exp_type == 'mass_regressor':
+        volume_map = _load_volume_map(cfg)
         return DepthDataset(
             overhead_root=cfg['data']['overhead_root'],
             metadata=meta, dish_ids=ids, mode=mode,
             rgb_transform=rgb_tfm,
             depth_transform=None,
-            volume_map=_load_volume_map(cfg),
+            volume_map=volume_map if volume_map else None,
             preload_ram=preload,
         )
     elif cfg['data'].get('use_depth', False):
@@ -90,6 +108,14 @@ def _build_model(cfg):
         in_channels = 4 if cfg['data'].get('use_depth', False) else 3
         return MultitaskNutritionNet(tasks=tasks, in_channels=in_channels,
                                      backbone_name=backbone_name)
+    if exp_type == 'dpf_nutrition':
+        return DPFNutritionNet(
+            tasks=tasks,
+            pretrained=cfg['model'].get('pretrained', True),
+            fusion_channels=cfg['model'].get('fusion_channels', 512),
+            head_hidden=cfg['model'].get('head_hidden', 512),
+            food2k_resnet101_path=cfg['model'].get('food2k_resnet101_path'),
+        )
     if exp_type == 'mass_regressor':
         return MassRegressor(use_volume=cfg['model'].get('use_volume', True),
                              backbone_name=backbone_name)
@@ -156,6 +182,11 @@ def run(config_path: str, resume_from: str = None):
         return torch.optim.RMSprop(params, lr=lr, **rmsprop_kwargs)
 
     def _make_scheduler(opt):
+        if cfg['training'].get('scheduler', '').lower() == 'exponential':
+            return torch.optim.lr_scheduler.ExponentialLR(
+                opt,
+                gamma=cfg['training'].get('lr_gamma', 0.98),
+            )
         return torch.optim.lr_scheduler.ReduceLROnPlateau(
             opt, mode='min',
             factor=cfg['training'].get('lr_factor', 0.5),
@@ -164,6 +195,8 @@ def run(config_path: str, resume_from: str = None):
         )
 
     if freeze_epochs > 0:
+        if not hasattr(model, 'backbone'):
+            raise ValueError('freeze_backbone_epochs requires a model with a backbone attribute')
         for p in model.backbone.parameters():
             p.requires_grad = False
         head_params = [p for p in model.parameters() if p.requires_grad]
@@ -176,6 +209,28 @@ def run(config_path: str, resume_from: str = None):
     scaler = torch.amp.GradScaler('cuda', enabled=(device.type == 'cuda'))
 
     tasks = cfg['model']['tasks']
+    loss_name = cfg['training'].get('loss', 'multitask_mae').lower()
+
+    def _compute_loss(preds, labels_d):
+        if loss_name == 'geometric_l1':
+            return geometric_l1_loss(preds, labels_d, tasks)
+        return multitask_mae_loss(preds, labels_d, tasks)
+
+    def _move_batch(batch):
+        if cfg['model']['type'] == 'dpf_nutrition':
+            rgb, depth, labels = batch
+            rgb = rgb.to(device, non_blocking=True)
+            depth = depth.to(device, non_blocking=True)
+            if device.type == 'cuda':
+                rgb = rgb.to(memory_format=torch.channels_last)
+                depth = depth.to(memory_format=torch.channels_last)
+            return (rgb, depth), {k: v.to(device, non_blocking=True) for k, v in labels.items()}
+        imgs, labels = batch
+        imgs = imgs.to(device, non_blocking=True)
+        if device.type == 'cuda':
+            imgs = imgs.to(memory_format=torch.channels_last)
+        return imgs, {k: v.to(device, non_blocking=True) for k, v in labels.items()}
+
     ckpt_dir = cfg['training']['checkpoint_dir']
     os.makedirs(ckpt_dir, exist_ok=True)
     patience = cfg['training'].get('early_stopping_patience', None)
@@ -205,20 +260,18 @@ def run(config_path: str, resume_from: str = None):
             train_loss = 0.0
 
             for batch in train_loader:
-                imgs, labels = batch
-                imgs = imgs.to(device, non_blocking=True)
-                if device.type == 'cuda':
-                    imgs = imgs.to(memory_format=torch.channels_last)
-                labels_d = {k: v.to(device, non_blocking=True) for k, v in labels.items()}
+                inputs, labels_d = _move_batch(batch)
 
                 with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                     if cfg['model']['type'] == 'mass_regressor':
                         vol = labels_d.pop('volume', None)
-                        preds = {'mass': model(imgs, vol)}
+                        preds = {'mass': model(inputs, vol)}
                         labels_d = {'mass': labels_d['mass']}
+                    elif cfg['model']['type'] == 'dpf_nutrition':
+                        preds = model(*inputs)
                     else:
-                        preds = model(imgs)
-                    loss = multitask_mae_loss(preds, labels_d, tasks)
+                        preds = model(inputs)
+                    loss = _compute_loss(preds, labels_d)
 
                 optimizer.zero_grad(set_to_none=True)
                 scaler.scale(loss).backward()
@@ -232,22 +285,23 @@ def run(config_path: str, resume_from: str = None):
             val_loss = 0.0
             with torch.no_grad():
                 for batch in val_loader:
-                    imgs, labels = batch
-                    imgs = imgs.to(device, non_blocking=True)
-                    if device.type == 'cuda':
-                        imgs = imgs.to(memory_format=torch.channels_last)
-                    labels_d = {k: v.to(device, non_blocking=True) for k, v in labels.items()}
+                    inputs, labels_d = _move_batch(batch)
                     with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                         if cfg['model']['type'] == 'mass_regressor':
                             vol = labels_d.pop('volume', None)
-                            preds = {'mass': model(imgs, vol)}
+                            preds = {'mass': model(inputs, vol)}
                             labels_d = {'mass': labels_d['mass']}
+                        elif cfg['model']['type'] == 'dpf_nutrition':
+                            preds = model(*inputs)
                         else:
-                            preds = model(imgs)
-                        val_loss += multitask_mae_loss(preds, labels_d, tasks).item()
+                            preds = model(inputs)
+                        val_loss += _compute_loss(preds, labels_d).item()
             val_loss /= len(val_loader)
 
-            scheduler.step(val_loss)
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(val_loss)
+            else:
+                scheduler.step()
             current_lr = optimizer.param_groups[0]['lr']
 
             elapsed = time.time() - t0

@@ -1,0 +1,37 @@
+data:
+  cafe1_csv: /content/drive/MyDrive/nutrition5k/data/metadata/dish_metadata_cafe1.csv
+  cafe2_csv: /content/drive/MyDrive/nutrition5k/data/metadata/dish_metadata_cafe2.csv
+  overhead_root: /dev/shm/realsense_overhead
+  pred_depth_root: /dev/shm/pred_depth
+  test_ids_txt: /content/drive/MyDrive/nutrition5k/data/splits/depth_test_ids.txt
+  train_ids_txt: /content/drive/MyDrive/nutrition5k/data/splits/depth_train_ids.txt
+  val_ratio: 0.1
+model:
+  food2k_resnet101_path: ""
+  fusion_channels: 512
+  head_hidden: 512
+  mode: direct
+  pretrained: true
+  tasks:
+  - calories
+  - mass
+  - fat
+  - carb
+  - protein
+  type: dpf_nutrition
+training:
+  alpha: 0.9
+  batch_size: 8
+  checkpoint_dir: /content/drive/MyDrive/nutrition5k/checkpoints/dpf
+  early_stopping_patience: null
+  eps: 1.0
+  freeze_backbone_epochs: 0
+  loss: geometric_l1
+  lr: 5.0e-05
+  lr_gamma: 0.98
+  max_epochs: 150
+  momentum: 0.9
+  num_workers: 8
+  optimizer: adam
+  scheduler: exponential
+  weight_decay: 0.0001

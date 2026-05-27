@@ -47,3 +47,17 @@ def multitask_mae_loss(preds: Dict[str, torch.Tensor],
         total = total + torch.stack(macro_losses).mean()
 
     return total
+
+
+def geometric_l1_loss(
+    preds: Dict[str, torch.Tensor],
+    targets: Dict[str, torch.Tensor],
+    task_names: List[str],
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    losses = []
+    for name in task_names:
+        mae = F.l1_loss(preds[name], targets[name])
+        losses.append(torch.clamp(mae, min=eps))
+    product = torch.prod(torch.stack(losses))
+    return product.pow(1.0 / len(task_names))
