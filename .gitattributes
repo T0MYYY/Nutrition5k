@@ -1,0 +1,17 @@
+# Normalize line endings: let Git auto-detect text and store with LF.
+* text=auto
+
+# Explicit text types (per-epoch logs, configs, notebooks, docs)
+*.csv   text
+*.json  text
+*.py    text
+*.md    text
+*.yaml  text
+*.yml   text
+
+# Binary assets (don't normalize / diff as text)
+*.png   binary
+*.jpg   binary
+*.pt    binary
+*.tar   binary
+*.zst   binary
