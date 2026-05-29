@@ -1,21 +1,22 @@
 # Core dependencies for the nutrition5k_pkg training / inference package.
 #
-# Target runtime: Google Colab (Python 3.11, CUDA 12.x; see CLAUDE.md).
+# Target runtime: Google Colab (Python 3.12, CUDA 12.x). Versions are pinned to the
+# current Colab runtime (May 2026) so reproduction matches the training environment.
 # Install with:  pip install -r requirements.txt
 #
 # The Gradio web demo pins its own dependencies in webapp/requirements.txt.
 
-# --- Deep learning ---
-torch>=2.0
-torchvision>=0.15
+# --- Deep learning (Colab runtime, May 2026) ---
+torch==2.10.0
+torchvision==0.25.0
 
 # --- Data, config & utilities ---
-numpy
-pandas
-PyYAML
-Pillow
-tqdm
+numpy==2.0.2
+pandas>=2.2,<2.3
+PyYAML==6.0.3
+Pillow==12.0.0
+tqdm>=4.66
 
 # --- Optional: backbone ablations (ConvNeXt / Swin-V2, see configs/colab/ablations/) ---
-# Only required when model.backbone is not 'inception_v3'; backbone.py lazy-imports it.
-timm
+# Not part of the Colab base image; pip-installed on demand. backbone.py lazy-imports it.
+timm>=1.0,<2.0

@@ -16,12 +16,12 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 </p>
 
 <p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&labelColor=2a323d&logo=python&logoColor=white">
-  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat-square&labelColor=2a323d&logo=pytorch&logoColor=white">
-  <img alt="torchvision" src="https://img.shields.io/badge/torchvision-0.15+-EE4C2C?style=flat-square&labelColor=2a323d">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&labelColor=2a323d&logo=python&logoColor=white">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.10-EE4C2C?style=flat-square&labelColor=2a323d&logo=pytorch&logoColor=white">
+  <img alt="torchvision" src="https://img.shields.io/badge/torchvision-0.25-EE4C2C?style=flat-square&labelColor=2a323d">
   <img alt="timm" src="https://img.shields.io/badge/timm-ablations-5B5BD6?style=flat-square&labelColor=2a323d">
-  <img alt="NumPy" src="https://img.shields.io/badge/NumPy-1.x-013243?style=flat-square&labelColor=2a323d&logo=numpy&logoColor=white">
-  <img alt="pandas" src="https://img.shields.io/badge/pandas-2.x-150458?style=flat-square&labelColor=2a323d&logo=pandas&logoColor=white">
+  <img alt="NumPy" src="https://img.shields.io/badge/NumPy-2.0-013243?style=flat-square&labelColor=2a323d&logo=numpy&logoColor=white">
+  <img alt="pandas" src="https://img.shields.io/badge/pandas-2.2-150458?style=flat-square&labelColor=2a323d&logo=pandas&logoColor=white">
   <img alt="Gradio" src="https://img.shields.io/badge/Gradio-5.x-FF7C00?style=flat-square&labelColor=2a323d">
   <img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Hub-FFD21E?style=flat-square&labelColor=2a323d">
 </p>
