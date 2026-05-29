@@ -29,7 +29,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 <p align="center">
   <a href="https://github.com/google-research-datasets/Nutrition5k"><img alt="Dataset" src="https://img.shields.io/badge/Dataset-Nutrition5k-4285F4?style=flat-square&labelColor=2a323d"></a>
   <a href="https://austinwang10-food-calorie-app.hf.space/"><img alt="Live Demo" src="https://img.shields.io/badge/%F0%9F%A4%97%20Live%20Demo-Spaces-FFD21E?style=flat-square&labelColor=2a323d"></a>
-  <a href="https://github.com/T0MYYY/CalBro"><img alt="iOS App" src="https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?style=flat-square&labelColor=2a323d&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/T0MYYY/calbro"><img alt="iOS App" src="https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?style=flat-square&labelColor=2a323d&logo=apple&logoColor=white"></a>
   <a href="https://huggingface.co/T0MYYY/dpf-nutrition"><img alt="Weights" src="https://img.shields.io/badge/%F0%9F%A4%97%20Weights-dpf--nutrition-FFD21E?style=flat-square&labelColor=2a323d"></a>
   <a href="https://huggingface.co/T0MYYY/nutrition5k-experiments"><img alt="Checkpoints" src="https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-experiments-FFD21E?style=flat-square&labelColor=2a323d"></a>
 </p>
@@ -52,7 +52,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 - **Track A — Applied baseline + demo (`webapp/`).** A compact ResNet-18 RGB / RGB-D calorie regressor with an optional Food-101 auxiliary head, shipped as a **Gradio web app on Hugging Face Spaces**.
 - **Official splits throughout.** Every experiment uses the official Nutrition5k train/test split files, keeping results directly comparable to the paper.
 - **Honest reporting.** Where our numbers fall short of the paper we say so, and we analyse *why* (notably the unavailable **JFT-300M** pretraining), backed by a backbone ablation.
-- **Track C — On-device iOS app ([CalBro](https://github.com/T0MYYY/CalBro)).** A native SwiftUI iPhone app that ships the **DPF-Nutrition (RGB + Depth)** model as Core ML and estimates calories/macros from a single overhead photo, fully offline (Depth Anything V2 → DPF). It is an **engineering/UX prototype** — the backbone is not calibrated for phone capture, so its numbers carry no reference value (details in the [CalBro repo](https://github.com/T0MYYY/CalBro)).
+- **Track C — On-device iOS app ([CalBro](https://github.com/T0MYYY/calbro)).** A native SwiftUI iPhone app that ships the **DPF-Nutrition (RGB + Depth)** model as Core ML and estimates calories/macros from a single overhead photo, fully offline (Depth Anything V2 → DPF). It is an **engineering/UX prototype** — the backbone is not calibrated for phone capture, so its numbers carry no reference value (details in the [CalBro repo](https://github.com/T0MYYY/calbro)).
 
 > **Two metrics, kept separate.** Track B reports **PMAE** (percentage mean absolute error, the paper's metric). Track A reports **absolute kcal MAE/RMSE** on a storage-limited local subset. They are *not* directly comparable — see [Results at a glance](#results-at-a-glance).
 
