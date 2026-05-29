@@ -8,6 +8,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 [![Dataset](https://img.shields.io/badge/Dataset-Nutrition5k-4285F4)](https://github.com/google-research-datasets/Nutrition5k)
 [![Live Demo](https://img.shields.io/badge/%F0%9F%A4%97%20Live%20Demo-Hugging%20Face-FFD21E)](https://austinwang10-food-calorie-app.hf.space/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C)](https://pytorch.org/)
+[![iOS App](https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?logo=apple)](https://github.com/T0MYYY/CalBro)
 
 <img src="webapp/presentation/slide_picks/04_data_sample_dishes.png" alt="Nutrition5k overhead dish examples" width="78%">
 
@@ -23,6 +24,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 - **Track A — Applied baseline + demo (`webapp/`).** A compact ResNet-18 RGB / RGB-D calorie regressor with an optional Food-101 auxiliary head, shipped as a **Gradio web app on Hugging Face Spaces**.
 - **Correctness first.** We identified and fixed a **data leak** (an `82%` train/test contamination from a hash-based split) and re-ran every experiment on the official split files.
 - **Honest reporting.** Where our numbers fall short of the paper we say so, and we analyse *why* (notably the unavailable **JFT-300M** pretraining), backed by a backbone ablation.
+- **Track C — On-device iOS app ([CalBro](https://github.com/T0MYYY/CalBro)).** A native SwiftUI iPhone app that ships the **DPF-Nutrition (RGB + Depth)** model as Core ML and estimates calories/macros from a single overhead photo, fully offline (Depth Anything V2 → DPF). It is an **engineering/UX prototype** — the backbone is not calibrated for phone capture, so its numbers carry no reference value (details in the [CalBro repo](https://github.com/T0MYYY/CalBro)).
 
 > **Two metrics, kept separate.** Track B reports **PMAE** (percentage mean absolute error, the paper's metric). Track A reports **absolute kcal MAE/RMSE** on a storage-limited local subset. They are *not* directly comparable — see [Results at a glance](#results-at-a-glance).
 
