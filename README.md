@@ -16,7 +16,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 
 </div>
 
-> **Abstract.** We study dish-level calorie and macronutrient estimation on *Nutrition5k* from two complementary angles. **(i)** We faithfully reproduce the four experiments of the CVPR 2021 paper under the **official** train/test splits — after fixing a hash-split data leak that had contaminated **~82%** of the test set — and extend the study to **DPF-Nutrition**'s depth-prediction-and-fusion pipeline. **(ii)** We build a compact, deployable **ResNet-18 RGB/RGB-D** baseline with a live web demo. Our reproduction tracks the paper closely where depth is available — Exp 3 *mass* estimation even **surpasses** the reported result — and a controlled backbone ablation attributes the residual gap to the **unavailable JFT-300M food-domain pretraining** rather than to model capacity.
+> **Abstract.** We study dish-level calorie and macronutrient estimation on *Nutrition5k* from two complementary angles. **(i)** We faithfully reproduce the four experiments of the CVPR 2021 paper under the **official** train/test splits, and extend the study to **DPF-Nutrition**'s depth-prediction-and-fusion pipeline. **(ii)** We build a compact, deployable **ResNet-18 RGB/RGB-D** baseline with a live web demo. Our reproduction tracks the paper closely where depth is available — Exp 3 *mass* estimation even **surpasses** the reported result — and a controlled backbone ablation attributes the residual gap to the **unavailable JFT-300M food-domain pretraining** rather than to model capacity.
 
 ---
 
@@ -24,7 +24,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 
 - **Track B — Paper reproduction (`nutrition5k_pkg/`, `notebooks/`).** All four experiments of *Nutrition5k* (CVPR 2021) reproduced under **official train/test splits**, plus an extension reproducing **DPF-Nutrition**. Trains on Google Colab (A100), stores data on Google Drive; the local machine only edits code.
 - **Track A — Applied baseline + demo (`webapp/`).** A compact ResNet-18 RGB / RGB-D calorie regressor with an optional Food-101 auxiliary head, shipped as a **Gradio web app on Hugging Face Spaces**.
-- **Correctness first.** We identified and fixed a **data leak** (an `82%` train/test contamination from a hash-based split) and re-ran every experiment on the official split files.
+- **Official splits throughout.** Every experiment uses the official Nutrition5k train/test split files, keeping results directly comparable to the paper.
 - **Honest reporting.** Where our numbers fall short of the paper we say so, and we analyse *why* (notably the unavailable **JFT-300M** pretraining), backed by a backbone ablation.
 - **Track C — On-device iOS app ([CalBro](https://github.com/T0MYYY/CalBro)).** A native SwiftUI iPhone app that ships the **DPF-Nutrition (RGB + Depth)** model as Core ML and estimates calories/macros from a single overhead photo, fully offline (Depth Anything V2 → DPF). It is an **engineering/UX prototype** — the backbone is not calibrated for phone capture, so its numbers carry no reference value (details in the [CalBro repo](https://github.com/T0MYYY/CalBro)).
 
@@ -106,7 +106,7 @@ We use the **official split files** throughout Track B:
 | `rgb_train_ids.txt` / `rgb_test_ids.txt` | 4059 / 709 | Exp 1, Exp 2 (side-angle) |
 | `depth_train_ids.txt` / `depth_test_ids.txt` | 2758 / 507 | Exp 3, Exp 4, DPF (overhead RGB-D) |
 
-> **Data-leakage fix.** An earlier hash-based split silently leaked **~82% of test dishes into training**, producing implausibly fast convergence and inflated scores. We replaced it with a loader that reads the official `*_ids.txt` files and asserts `train ∩ test = ∅`. **Every result below uses the official splits.**
+> **Official splits.** Every result below uses the official Nutrition5k `*_ids.txt` train/test split files (the loader asserts `train ∩ test = ∅`).
 
 ---
 
@@ -316,7 +316,7 @@ Full CLI reference: [`webapp/README.md`](webapp/README.md).
 
 | Contributor | Role |
 |---|---|
-| **Tom Chen** | Paper reproduction (Track B): Exp 1–4, DPF-Nutrition, Colab/Drive pipeline, ablations, leakage fix |
+| **Tom Chen** | Paper reproduction (Track B): Exp 1–4, DPF-Nutrition, Colab/Drive pipeline, ablations |
 | **Yiou (Austin) Wang** | Applied baseline & web demo (Track A): model, training, evaluation, Gradio app, Hugging Face Spaces deployment |
 | **Peter Xiong** | Applied baseline (Track A): Windows tooling, presentation-asset generation |
 
