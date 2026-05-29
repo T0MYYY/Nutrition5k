@@ -10,6 +10,7 @@ a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable a
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C)](https://pytorch.org/)
 [![iOS App](https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?logo=apple)](https://github.com/T0MYYY/CalBro)
 [![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20Weights-dpf--nutrition-FFD21E)](https://huggingface.co/T0MYYY/dpf-nutrition)
+[![Checkpoints](https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-nutrition5k--experiments-FFD21E)](https://huggingface.co/T0MYYY/nutrition5k-experiments)
 
 <img src="webapp/presentation/slide_picks/04_data_sample_dishes.png" alt="Nutrition5k overhead dish examples" width="78%">
 
