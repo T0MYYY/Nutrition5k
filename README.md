@@ -1,20 +1,46 @@
 <div align="center">
 
 # Nutrition5k — Vision-Based Food Calorie & Nutrition Estimation
+### UChicago ADSP 31018 · Machine Learning II — Final Project
 
 **A two-track study of estimating dish-level calories and macronutrients from food images:
 a faithful reproduction of the CVPR 2021 *Nutrition5k* paper, and a deployable applied baseline with a live web demo.**
 
-[![Dataset](https://img.shields.io/badge/Dataset-Nutrition5k-4285F4)](https://github.com/google-research-datasets/Nutrition5k)
-[![Live Demo](https://img.shields.io/badge/%F0%9F%A4%97%20Live%20Demo-Hugging%20Face-FFD21E)](https://austinwang10-food-calorie-app.hf.space/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C)](https://pytorch.org/)
-[![iOS App](https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?logo=apple)](https://github.com/T0MYYY/CalBro)
-[![Weights](https://img.shields.io/badge/%F0%9F%A4%97%20Weights-dpf--nutrition-FFD21E)](https://huggingface.co/T0MYYY/dpf-nutrition)
-[![Checkpoints](https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-nutrition5k--experiments-FFD21E)](https://huggingface.co/T0MYYY/nutrition5k-experiments)
+<!-- BADGES_BEGIN -->
+<p align="center">
+  <img alt="Course" src="https://img.shields.io/badge/Course-ADSP%2031018-DC143C?style=flat-square&labelColor=2a323d">
+  <img alt="UChicago" src="https://img.shields.io/badge/UChicago-Machine%20Learning%20II-800000?style=flat-square&labelColor=2a323d">
+  <img alt="Term" src="https://img.shields.io/badge/Term-Spring%202026-2a323d?style=flat-square&labelColor=2a323d">
+  <img alt="Team" src="https://img.shields.io/badge/Team-Group%20of%204-1f7a3d?style=flat-square&labelColor=2a323d">
+  <img alt="Status" src="https://img.shields.io/badge/Status-Final-ec5800?style=flat-square&labelColor=2a323d">
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&labelColor=2a323d&logo=python&logoColor=white">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat-square&labelColor=2a323d&logo=pytorch&logoColor=white">
+  <img alt="torchvision" src="https://img.shields.io/badge/torchvision-0.15+-EE4C2C?style=flat-square&labelColor=2a323d">
+  <img alt="timm" src="https://img.shields.io/badge/timm-ablations-5B5BD6?style=flat-square&labelColor=2a323d">
+  <img alt="NumPy" src="https://img.shields.io/badge/NumPy-1.x-013243?style=flat-square&labelColor=2a323d&logo=numpy&logoColor=white">
+  <img alt="pandas" src="https://img.shields.io/badge/pandas-2.x-150458?style=flat-square&labelColor=2a323d&logo=pandas&logoColor=white">
+  <img alt="Gradio" src="https://img.shields.io/badge/Gradio-5.x-FF7C00?style=flat-square&labelColor=2a323d">
+  <img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Hub-FFD21E?style=flat-square&labelColor=2a323d">
+</p>
+
+<p align="center">
+  <a href="https://github.com/google-research-datasets/Nutrition5k"><img alt="Dataset" src="https://img.shields.io/badge/Dataset-Nutrition5k-4285F4?style=flat-square&labelColor=2a323d"></a>
+  <a href="https://austinwang10-food-calorie-app.hf.space/"><img alt="Live Demo" src="https://img.shields.io/badge/%F0%9F%A4%97%20Live%20Demo-Spaces-FFD21E?style=flat-square&labelColor=2a323d"></a>
+  <a href="https://github.com/T0MYYY/CalBro"><img alt="iOS App" src="https://img.shields.io/badge/%F0%9F%93%B1%20iOS%20App-CalBro-000000?style=flat-square&labelColor=2a323d&logo=apple&logoColor=white"></a>
+  <a href="https://huggingface.co/T0MYYY/dpf-nutrition"><img alt="Weights" src="https://img.shields.io/badge/%F0%9F%A4%97%20Weights-dpf--nutrition-FFD21E?style=flat-square&labelColor=2a323d"></a>
+  <a href="https://huggingface.co/T0MYYY/nutrition5k-experiments"><img alt="Checkpoints" src="https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-experiments-FFD21E?style=flat-square&labelColor=2a323d"></a>
+</p>
+<!-- BADGES_END -->
 
 <img src="webapp/presentation/slide_picks/04_data_sample_dishes.png" alt="Nutrition5k overhead dish examples" width="78%">
 
 </div>
+
+**Course:** ADSP 31018 — Machine Learning II (Spring 2026, University of Chicago)  
+**Team:** Group of 4 — Tom Chen, Yiou (Austin) Wang, Peter Xiong, Issac Chang
 
 > **Abstract.** We study dish-level calorie and macronutrient estimation on *Nutrition5k* from two complementary angles. **(i)** We faithfully reproduce the four experiments of the CVPR 2021 paper under the **official** train/test splits, and extend the study to **DPF-Nutrition**'s depth-prediction-and-fusion pipeline. **(ii)** We build a compact, deployable **ResNet-18 RGB/RGB-D** baseline with a live web demo. Our reproduction tracks the paper closely where depth is available — Exp 3 *mass* estimation even **surpasses** the reported result — and a controlled backbone ablation attributes the residual gap to the **unavailable JFT-300M food-domain pretraining** rather than to model capacity.
 
@@ -319,6 +345,7 @@ Full CLI reference: [`webapp/README.md`](webapp/README.md).
 | **Tom Chen** | Paper reproduction (Track B): Exp 1–4, DPF-Nutrition, Colab/Drive pipeline, ablations |
 | **Yiou (Austin) Wang** | Applied baseline & web demo (Track A): model, training, evaluation, Gradio app, Hugging Face Spaces deployment |
 | **Peter Xiong** | Applied baseline (Track A): Windows tooling, presentation-asset generation |
+| **Issac Chang** | Evaluation, error analysis & presentation support |
 
 ---
 
